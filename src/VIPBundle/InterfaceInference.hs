@@ -121,6 +121,6 @@ detectIfcs ports = runST do
         newAXI4LiteIfc clk rst = Ifc     clk     rst [] AXI4Lite
         newConduitIfc  clk rst = Ifc     clk     rst [] Conduit
 
-inferInterfaces :: VerilogModule -> VerilogModuleWithIfc
-inferInterfaces VerilogModule{..} = VerilogModuleWithIfc modName modIfcs
+inferInterfaces :: Maybe FilePath -> VerilogModule -> VerilogModuleWithIfc
+inferInterfaces mfp VerilogModule{..} = VerilogModuleWithIfc modName modIfcs mfp
   where modIfcs = detectIfcs . detectPortIfcs $ modPorts

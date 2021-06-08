@@ -34,6 +34,7 @@ module VIPBundle.Pretty_QUARTUS_IP_TCL (
   pretty_QUARTUS_IP_TCL
 ) where
 
+import System.FilePath.Posix
 import Data.Map hiding (empty)
 import Text.PrettyPrint
 
@@ -43,14 +44,32 @@ comment doc = char '#' <+> doc
 
 prettyVerilogModuleWithIfc :: VerilogModuleWithIfc -> Doc
 prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
-  vcat $ modDefs : fileSetDefs : ifcsDefs
+  vcat $ pkgReq : modDefs : fileSetDefs : ifcsDefs
   where
+    -- TCL package require
+    pkgReq = text "package require qsys"
     -- Module level definitions
     modDefs = vcat [ comment (text "module:" <+> text richModName)
                    , mProp "NAME" richModName
                    , mProp "DISPLAY_NAME" richModName ]
     -- File Sets definitions
-    fileSetDefs = comment $ text "TODO: fileset"
+    fileSetNm = richModName ++ "_fileset"
+    fileSetDefs = case richModTopFile of
+      Just f -> vcat [ comment $ text "file set"
+                     , hsep [ text "add_fileset"
+                            , text fileSetNm
+                            , text "QUARTUS_SYNTH" ]
+                     , hsep [ text "set_fileset_property"
+                            , text fileSetNm
+                            , text "TOP_LEVEL"
+                            , text richModName ]
+                     , hsep [ text "add_fileset_file"
+                            , text $ takeFileName f
+                            , text "VERILOG"
+                            , text "PATH"
+                            , text f
+                            , text "TOP_LEVEL_FILE" ] ]
+      _ -> empty
     -- Sub-Interface level definitions
     ifcsDefs = ifcDefs <$> toList richModIfcs
     ifcDefs (iNm, ifc@Ifc{..}) =

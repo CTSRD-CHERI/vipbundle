@@ -102,17 +102,17 @@ main = do
   when (optHelpAndQuit opts) do putStrLn helpMsg
                                 exitSuccess
   --
-  (inptHandle, inptFileName) <-
-    case posArgs of f:_ -> openFile f ReadMode >>= \x -> return (x, f)
-                    [] -> return (stdin, "stdin")
+  (inptHandle, mInptFileName) <-
+    case posArgs of f:_ -> openFile f ReadMode >>= \x -> return (x, Just f)
+                    [] -> return (stdin, Nothing)
   outHandle <- case optOutputFile opts of Just f -> openFile f WriteMode
                                           Nothing -> return stdout
   let pretty = case optOutputFormat opts of
                  QUARTUS_IP_TCL -> pretty_QUARTUS_IP_TCL
                  _ -> show
   --
-  allVerilogModules <- parseVerilog inptFileName <$> hGetContents inptHandle
-  let allModIfcs = inferInterfaces <$> allVerilogModules
+  allVerilogModules <- parseVerilog mInptFileName <$> hGetContents inptHandle
+  let allModIfcs = inferInterfaces mInptFileName <$> allVerilogModules
   forM_ allModIfcs \x -> do
     hPutStrLn outHandle $ pretty x
   --

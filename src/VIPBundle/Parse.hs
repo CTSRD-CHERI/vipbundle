@@ -34,6 +34,7 @@ module VIPBundle.Parse (
   parseVerilog
 ) where
 
+import Data.Maybe
 import Text.Parsec
 import Text.Parsec.String
 import Text.Parsec.Language
@@ -114,7 +115,8 @@ parseAll = do
   skipTill eof
   return res
 
-parseVerilog :: FilePath -> String -> [VerilogModule]
-parseVerilog fp src = case parse parseAll fp src of
-                     Left  e -> error $ fp ++ ": " ++ show e ++ "\n"
-                     Right x -> x
+parseVerilog :: Maybe FilePath -> String -> [VerilogModule]
+parseVerilog mfp src = case parse parseAll fp src of
+  Left  e -> error $ fp ++ ": " ++ show e ++ "\n"
+  Right x -> x
+  where fp = fromMaybe "stdin" mfp

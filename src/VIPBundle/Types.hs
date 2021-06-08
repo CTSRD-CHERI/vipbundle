@@ -128,12 +128,16 @@ docIfc Ifc{..} =
 instance Show Ifc where show = render . docIfc
 
 data VerilogModuleWithIfc = VerilogModuleWithIfc {
-  richModName :: String
-, richModIfcs :: Map String Ifc }
+  richModName    :: String
+, richModIfcs    :: Map String Ifc
+, richModTopFile :: Maybe FilePath }
 docVerilogModuleWithIfc :: VerilogModuleWithIfc -> Doc
 docVerilogModuleWithIfc VerilogModuleWithIfc{..} =
   hang (hsep [text "--", text richModName, text "(module)", text "--"]) 2
-       (vcat $ fmap prettyIfc (toList richModIfcs))
+       (vcat $ topfileline : fmap prettyIfc (toList richModIfcs))
   where prettyIfc (nm, ifc) =
           text "*" <+> text nm <> colon <+> docIfc ifc
+        topfileline = case richModTopFile of
+                        Just f -> text "top file: " <> text f
+                        _ -> empty
 instance Show VerilogModuleWithIfc where show = render . docVerilogModuleWithIfc
