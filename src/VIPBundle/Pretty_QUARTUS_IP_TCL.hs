@@ -96,6 +96,12 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
     isAXI4LiteSIfc Ifc{..} =
       ifcType == AXI4Lite && case head ifcPorts of AXI4LiteSPort _ _ _ -> True
                                                    _ -> False
+    isIrqSIfc Ifc{..} =
+      ifcType == Irq && case head ifcPorts of IrqSenderPort _ -> True
+                                              _ -> False
+    isIrqRIfc Ifc{..} =
+      ifcType == Irq && case head ifcPorts of IrqReceiverPort _ -> True
+                                              _ -> False
     -- Quartus platform designer command helpers
     iAssocClk iNm clk@(ClockPort VerilogPort{..})
       | portDirection == In && portWidth == 1 =
@@ -120,6 +126,10 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
       iPort iNm portName sNm (show portDirection) portWidth
     iIfcPort iNm (AXI4LiteSPort _ sNm VerilogPort{..}) =
       iPort iNm portName sNm (show portDirection) portWidth
+    iIfcPort iNm (IrqSenderPort VerilogPort{..}) =
+      iPort iNm portName "irq" (show portDirection) portWidth
+    iIfcPort iNm (IrqReceiverPort VerilogPort{..}) =
+      iPort iNm portName "irq" (show portDirection) portWidth
     iIfcPort iNm (ConduitPort VerilogPort{..}) =
       iPort iNm portName portName (show portDirection) portWidth
     -- generic Quartus platform designer command helpers
@@ -133,6 +143,7 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
                AXI4 | isAXI4SIfc ifc -> text "slave"
                AXI4Lite | isAXI4LiteMIfc ifc -> text "master"
                AXI4Lite | isAXI4LiteSIfc ifc -> text "slave"
+               Irq | isIrqRIfc ifc -> text "start"
                _ -> text "end" ]
     iProp iNm pNm val =
       hsep [ text "set_interface_property", text iNm, text pNm, text val ]

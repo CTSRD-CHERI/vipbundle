@@ -48,12 +48,13 @@ data PortDir = In | Out deriving Eq
 instance Show PortDir where
   show In  = "Input"
   show Out = "Output"
-data IfcType = Clock | Reset | AXI4 | AXI4Lite | Conduit deriving Eq
+data IfcType = Clock | Reset | AXI4 | AXI4Lite | Irq | Conduit deriving Eq
 instance Show IfcType where
   show Clock = "clock"
   show Reset = "reset"
   show AXI4 = "axi4"
   show AXI4Lite = "axi4lite"
+  show Irq = "interrupt"
   show Conduit = "conduit"
 
 data VerilogPort = VerilogPort {
@@ -83,6 +84,8 @@ data VerilogPortWithIfc =
   | AXI4SPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
   | AXI4LiteMPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
   | AXI4LiteSPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
+  | IrqSenderPort VerilogPort
+  | IrqReceiverPort VerilogPort
   | ConduitPort VerilogPort
 docVerilogPortWithIfc :: VerilogPortWithIfc -> Doc
 docVerilogPortWithIfc (ClockPort vp) =
@@ -107,6 +110,10 @@ docVerilogPortWithIfc (AXI4LiteSPort _ sNm vp) =
   hsep [ text "AXI4Lite Slave", text "-"
        , text sNm, text "--"
        , docVerilogPort vp ]
+docVerilogPortWithIfc (IrqSenderPort vp) =
+  hsep [ text "Interrupt Sender", text "--" , docVerilogPort vp ]
+docVerilogPortWithIfc (IrqReceiverPort vp) =
+  hsep [ text "Interrupt Receiver", text "--" , docVerilogPort vp ]
 docVerilogPortWithIfc (ConduitPort vp) =
   hsep [ text "<no interface>", text "--", docVerilogPort vp ]
 instance Show VerilogPortWithIfc where show = render . docVerilogPortWithIfc

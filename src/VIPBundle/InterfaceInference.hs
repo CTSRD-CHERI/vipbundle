@@ -81,6 +81,15 @@ detectAXI4Port p@VerilogPort{..} =
         go ["l", "s", _, ifcnm, signm] = Just $ AXI4LiteSPort ifcnm signm p
         go _ = Nothing
 
+detectIrqPort :: DetectPort
+detectIrqPort p@VerilogPort{..} =
+  case portName =~ "\\<in([sr])(_(.*))?" :: RegexRetType of
+    RegexMatches matches -> go matches
+    _ -> Nothing
+  where go ["s", _, _] = Just $ IrqSenderPort p
+        go ["r", _, _] = Just $ IrqReceiverPort p
+        go _ = Nothing
+
 detectConduitPort :: DetectPort
 detectConduitPort p = Just $ ConduitPort p
 
@@ -89,6 +98,7 @@ detectPortIfcs = fmap (fromMaybe (error "port detection error") . detectIfc)
   where detectIfc p = asum [ detectClockPort p
                            , detectResetPort p
                            , detectAXI4Port p
+                           , detectIrqPort p
                            , detectConduitPort p ]
 
 detectIfcs :: [VerilogPortWithIfc] -> M.Map String Ifc
@@ -113,12 +123,15 @@ detectIfcs ports = runST do
               return (iNm, fromMaybe (newAXI4LiteIfc clk rst) (M.lookup iNm mp))
             AXI4LiteSPort iNm _ _ ->
               return (iNm, fromMaybe (newAXI4LiteIfc clk rst) (M.lookup iNm mp))
+            IrqSenderPort vp -> return (portName vp, newIrqIfc)
+            IrqReceiverPort vp -> return (portName vp, newIrqIfc)
             ConduitPort vp -> return (portName vp, newConduitIfc clk rst)
           go clkRef rstRef ps (M.insert nm ifc{ifcPorts = p : ifcPorts ifc} mp)
         newClkIfc              = Ifc Nothing Nothing [] Clock
         newRstIfc      clk     = Ifc     clk Nothing [] Reset
         newAXI4Ifc     clk rst = Ifc     clk     rst [] AXI4
         newAXI4LiteIfc clk rst = Ifc     clk     rst [] AXI4Lite
+        newIrqIfc              = Ifc Nothing Nothing [] Irq
         newConduitIfc  clk rst = Ifc     clk     rst [] Conduit
 
 inferInterfaces :: Maybe FilePath -> VerilogModule -> VerilogModuleWithIfc
