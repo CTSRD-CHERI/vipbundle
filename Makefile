@@ -28,9 +28,7 @@
 # @BERI_LICENSE_HEADER_END@
 #
 
-SRC_DIR = $(CURDIR)/src
-HI_DIR = $(CURDIR)/hidir
-O_DIR = $(CURDIR)/odir
+SRC_DIR = src
 MAIN_SRC = $(SRC_DIR)/VIPBundle.hs
 SRCS = $(MAIN_SRC)
 SRCS += $(SRC_DIR)/VIPBundle/InterfaceInference.hs
@@ -43,15 +41,13 @@ SRCS += $(SRC_DIR)/VIPBundle/Pretty_QUARTUS_IP_TCL.hs
 all: vipbundle
 
 vipbundle: $(SRCS)
-	ghc --make -j \
-        -hidir $(HI_DIR) -odir $(O_DIR) -i$(SRC_DIR) \
-		-o $@ \
-        $(MAIN_SRC)
+	cabal build
+	ln -s `cabal list-bin vipbundle` vipbundle
 
 .PHONY: clean mrproper
 
 clean:
-	rm -rf $(HI_DIR) $(O_DIR)
+	cabal clean
 
 mrproper: clean
 	rm -f vipbundle
