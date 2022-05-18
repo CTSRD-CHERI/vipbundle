@@ -1,0 +1,48 @@
+= Verilog IP Bundle
+
+A command line tool to wrap a Verilog IP into a package for use with an EDA toolchain.
+It currently targets Quartus with its tcl wrapping of components for use in the QSys / Platform Designer tool.
+
+== Working principle
+
+The `vipbundle` tool parses a Verilog file looking for modules, and identifies its input and output ports.
+It then infers the kind of the provided interfaces based on the names of the ports (as described in https://github.com/CTSRD-CHERI/vipbundle/blob/main/src/VIPBundle/InterfaceInference.hs[InterfaceInference.hs]).
+Currently supported interfaces are:
+
+* Clock, for signal names matching the regex
++
+[code,regex]
+------------
+\\<(clk|CLK)(_(.*))?
+------------
+* Reset, for signal names matching the regex
++
+[code,regex]
+------------
+\\<(rst|RST)(_(n|N))?(_(.*))?
+------------
+* AXI4[Lite], for signal names matching the regex
++
+[code,regex]
+------------
+\\<ax(l?)([ms])_((.+)_)*(.+)
+------------
+* Irq, for signal names matching the regex
++
+[code,regex]
+------------
+\\<in([sr])(_(.*))?
+------------
+* Conduit, for all other signal names
+
+For each interface found, `vipbundle` will generate the apropriate tcl code block to describe it to the Quartus toolchain. The generated tcl file together with the Verilog file can be imported from within Quartus to make available the IP.
+
+== Usage
+
+[source,shell]
+--------------
+Usage: vipbundle [OPTION...] files...
+  -o FILEPATH      --output-file=FILEPATH        specify a FILEPATH for the output file
+  -f OUTPUTFORMAT  --output-format=OUTPUTFORMAT  specify desired OUTPUTFORMAT, one of quartus_ip_tcl, txt (default)
+  -h               --help                        display help
+--------------
