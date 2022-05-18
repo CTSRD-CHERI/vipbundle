@@ -1,6 +1,6 @@
 = Verilog IP Bundle
 
-A command line tool to wrap a Verilog IP into a package for use with an EDA toolchain.
+A command line tool to bundle a Verilog IP into a package for use with an EDA toolchain.
 It currently targets Quartus with its tcl wrapping of components for use in the QSys / Platform Designer tool.
 
 == Working principle
