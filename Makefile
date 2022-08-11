@@ -42,7 +42,9 @@ all: vipbundle
 
 vipbundle: $(SRCS)
 	cabal build
+ifeq (,$(wildcard vipbundle))
 	ln -s `cabal list-bin vipbundle` vipbundle
+endif
 
 .PHONY: clean mrproper
 
