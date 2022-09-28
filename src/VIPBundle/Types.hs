@@ -78,8 +78,10 @@ docVerilogModule VerilogModule{..} =
 instance Show VerilogModule where show = render . docVerilogModule
 
 data VerilogPortWithIfc =
-    ClockPort VerilogPort
-  | ResetPort Bool VerilogPort
+    ClockSinkPort VerilogPort
+  | ClockSourcePort VerilogPort
+  | ResetSinkPort Bool VerilogPort
+  | ResetSourcePort Bool VerilogPort
   | AXI4MPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
   | AXI4SPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
   | AXI4LiteMPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
@@ -88,10 +90,16 @@ data VerilogPortWithIfc =
   | IrqReceiverPort VerilogPort
   | ConduitPort VerilogPort
 docVerilogPortWithIfc :: VerilogPortWithIfc -> Doc
-docVerilogPortWithIfc (ClockPort vp) =
-  hsep [ text "Clock", text "--", docVerilogPort vp ]
-docVerilogPortWithIfc (ResetPort activLo vp) =
-  hsep [ text "Reset"
+docVerilogPortWithIfc (ClockSinkPort vp) =
+  hsep [ text "Clock Sink", text "--", docVerilogPort vp ]
+docVerilogPortWithIfc (ClockSourcePort vp) =
+  hsep [ text "Clock Source", text "--", docVerilogPort vp ]
+docVerilogPortWithIfc (ResetSinkPort activLo vp) =
+  hsep [ text "Reset Sink"
+       , if activLo then text "[Active Low]" else empty
+       , text "--", docVerilogPort vp ]
+docVerilogPortWithIfc (ResetSourcePort activLo vp) =
+  hsep [ text "Reset Source"
        , if activLo then text "[Active Low]" else empty
        , text "--", docVerilogPort vp ]
 docVerilogPortWithIfc (AXI4MPort _ sNm vp) =
@@ -128,7 +136,8 @@ docIfc Ifc{..} =
   hang (text (show ifcType) <+> text "(interface)") 2
        (vcat [ case ifcClock of
                  Just p -> text "associated clock:" <+> docVerilogPortWithIfc p
-                 Nothing -> text "no associated clock" , case ifcReset of
+                 Nothing -> text "no associated clock"
+             , case ifcReset of
                  Just p -> text "associated reset:" <+> docVerilogPortWithIfc p
                  Nothing -> text "no associated reset"
              , sep $ (text "ports:") : fmap docVerilogPortWithIfc ifcPorts ])

@@ -28,9 +28,10 @@
 -- @BERI_LICENSE_HEADER_END@
 --
 
-{-# LANGUAGE BlockArguments  #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE BlockArguments      #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module VIPBundle.InterfaceInference (
   inferInterfaces
@@ -39,6 +40,7 @@ module VIPBundle.InterfaceInference (
 import Data.Maybe
 import Data.STRef
 import Data.Foldable
+import Control.Monad
 import Text.Regex.TDFA
 import Control.Monad.ST
 import qualified Data.Map as M
@@ -57,13 +59,18 @@ type DetectPort = VerilogPort -> Maybe VerilogPortWithIfc
 
 detectClockPort :: DetectPort
 detectClockPort p@VerilogPort{..} =
-  if portName =~ "\\<(clk|CLK)(_(.*))?" then Just $ ClockPort p else Nothing
+  case portName =~ "\\<cs(i|o)(_(.*))?" :: RegexRetType of
+    RegexMatches ["i",_,_] -> Just $ ClockSinkPort p
+    RegexMatches ["o",_,_] -> Just $ ClockSourcePort p
+    _ -> Nothing
 
 detectResetPort :: DetectPort
 detectResetPort p@VerilogPort{..} =
-  case portName =~ "\\<(rst|RST)(_(n|N))?(_(.*))?" :: RegexRetType of
-    RegexMatches [_,_,"",_,_] -> Just $ ResetPort False p
-    RegexMatches [_,_, _,_,_] -> Just $ ResetPort  True p
+  case portName =~ "\\<rs(i|o)(_(n|N))?(_(.*))?" :: RegexRetType of
+    RegexMatches ["i",_,"",_,_] -> Just $ ResetSinkPort   False p
+    RegexMatches ["o",_,"",_,_] -> Just $ ResetSourcePort False p
+    RegexMatches ["i",_, _,_,_] -> Just $ ResetSinkPort   True  p
+    RegexMatches ["o",_, _,_,_] -> Just $ ResetSourcePort True  p
     _ -> Nothing
 
 detectAXI4Port :: DetectPort
@@ -111,10 +118,12 @@ detectIfcs ports = runST do
           clk <- readSTRef clkRef
           rst <- readSTRef rstRef
           (nm, ifc) <- case p of
-            ClockPort vp -> do writeSTRef clkRef $ Just p
-                               return (portName vp, newClkIfc)
-            ResetPort _ vp -> do writeSTRef rstRef $ Just p
-                                 return (portName vp, newRstIfc clk)
+            ClockSinkPort vp -> do writeSTRef clkRef $ Just p
+                                   return (portName vp, newClkIfc)
+            ClockSourcePort vp -> return (portName vp, newClkIfc)
+            ResetSinkPort _ vp -> do writeSTRef rstRef $ Just p
+                                     return (portName vp, newRstIfc clk)
+            ResetSourcePort _ vp -> return (portName vp, newRstIfc clk)
             AXI4MPort iNm _ _ ->
               return (iNm, fromMaybe (newAXI4Ifc clk rst) (M.lookup iNm mp))
             AXI4SPort iNm _ _ ->

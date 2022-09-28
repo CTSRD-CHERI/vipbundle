@@ -102,20 +102,39 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
     isIrqRIfc Ifc{..} =
       ifcType == Irq && case head ifcPorts of IrqReceiverPort _ -> True
                                               _ -> False
+    isClockSink Ifc{..} =
+      ifcType == Clock && case head ifcPorts of ClockSinkPort _ -> True
+                                                _ -> False
+    isClockSource Ifc{..} =
+      ifcType == Clock && case head ifcPorts of ClockSourcePort _ -> True
+                                                _ -> False
+    isResetSink Ifc{..} =
+      ifcType == Reset && case head ifcPorts of ResetSinkPort _ _ -> True
+                                                _ -> False
+    isResetSource Ifc{..} =
+      ifcType == Reset && case head ifcPorts of ResetSourcePort _ _ -> True
+                                                _ -> False
     -- Quartus platform designer command helpers
-    iAssocClk iNm clk@(ClockPort VerilogPort{..})
+    iAssocClk iNm clk@(ClockSinkPort VerilogPort{..})
       | portDirection == In && portWidth == 1 =
         iProp iNm "associatedClock" portName
       | otherwise = error $ "broken clock: " ++ show clk
-    iAssocRst iNm rst@(ResetPort _ VerilogPort{..})
+    iAssocRst iNm rst@(ResetSinkPort _ VerilogPort{..})
       | portDirection == In && portWidth == 1 =
         iProp iNm "associatedReset" portName
       | otherwise = error $ "broken reset: " ++ show rst
-    iRstPolarity iNm (ResetPort deAssrt _) =
+    iRstPolarity iNm (ResetSinkPort deAssrt _) =
       iProp iNm "synchronousEdges" $ if deAssrt then "DEASSERT" else "ASSERT"
-    iIfcPort iNm (ClockPort VerilogPort{..}) =
+    iRstPolarity iNm (ResetSourcePort deAssrt _) =
+      iProp iNm "synchronousEdges" $ if deAssrt then "DEASSERT" else "ASSERT"
+    iIfcPort iNm (ClockSourcePort VerilogPort{..}) =
       iPort iNm portName "clk" (show portDirection) portWidth
-    iIfcPort iNm (ResetPort pol VerilogPort{..}) =
+    iIfcPort iNm (ClockSinkPort VerilogPort{..}) =
+      iPort iNm portName "clk" (show portDirection) portWidth
+    iIfcPort iNm (ResetSinkPort pol VerilogPort{..}) =
+      iPort iNm portName ("reset" ++ if pol then "_n" else "")
+                         (show portDirection) portWidth
+    iIfcPort iNm (ResetSourcePort pol VerilogPort{..}) =
       iPort iNm portName ("reset" ++ if pol then "_n" else "")
                          (show portDirection) portWidth
     iIfcPort iNm (AXI4MPort _ sNm VerilogPort{..}) =
@@ -144,6 +163,10 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
                AXI4Lite | isAXI4LiteMIfc ifc -> text "master"
                AXI4Lite | isAXI4LiteSIfc ifc -> text "slave"
                Irq | isIrqRIfc ifc -> text "start"
+               Clock | isClockSink ifc -> text "end"
+               Clock | isClockSource ifc -> text "start"
+               Reset | isResetSink ifc -> text "end"
+               Reset | isResetSource ifc -> text "start"
                _ -> text "end" ]
     iProp iNm pNm val =
       hsep [ text "set_interface_property", text iNm, text pNm, text val ]
