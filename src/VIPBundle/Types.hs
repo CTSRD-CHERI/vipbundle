@@ -48,12 +48,21 @@ data PortDir = In | Out deriving Eq
 instance Show PortDir where
   show In  = "Input"
   show Out = "Output"
-data IfcType = Clock | Reset | AXI4 | AXI4Lite | Irq | Conduit deriving Eq
+data IfcType =
+    Clock
+  | Reset
+  | AXI4
+  | AXI4Lite
+  | AXI4Stream
+  | Irq
+  | Conduit
+  deriving Eq
 instance Show IfcType where
   show Clock = "clock"
   show Reset = "reset"
   show AXI4 = "axi4"
   show AXI4Lite = "axi4lite"
+  show AXI4Stream = "axi4stream"
   show Irq = "interrupt"
   show Conduit = "conduit"
 
@@ -86,6 +95,8 @@ data VerilogPortWithIfc =
   | AXI4SPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
   | AXI4LiteMPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
   | AXI4LiteSPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
+  | AXI4StreamMPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
+  | AXI4StreamSPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
   | IrqSenderPort VerilogPort
   | IrqReceiverPort VerilogPort
   | ConduitPort VerilogPort
@@ -116,6 +127,14 @@ docVerilogPortWithIfc (AXI4LiteMPort _ sNm vp) =
        , docVerilogPort vp ]
 docVerilogPortWithIfc (AXI4LiteSPort _ sNm vp) =
   hsep [ text "AXI4Lite Slave", text "-"
+       , text sNm, text "--"
+       , docVerilogPort vp ]
+docVerilogPortWithIfc (AXI4StreamMPort _ sNm vp) =
+  hsep [ text "AXI4Stream Master", text "-"
+       , text sNm, text "--"
+       , docVerilogPort vp ]
+docVerilogPortWithIfc (AXI4StreamSPort _ sNm vp) =
+  hsep [ text "AXI4Stream Slave", text "-"
        , text sNm, text "--"
        , docVerilogPort vp ]
 docVerilogPortWithIfc (IrqSenderPort vp) =

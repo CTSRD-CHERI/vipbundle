@@ -75,17 +75,21 @@ detectResetPort p@VerilogPort{..} =
 
 detectAXI4Port :: DetectPort
 detectAXI4Port p@VerilogPort{..} =
-  case portName =~ "\\<ax(l?)([ms])_((.+)_)*(.+)" :: RegexRetType of
+  case portName =~ "\\<ax(l|str)?([ms])_((.+)_)*(.+)" :: RegexRetType of
     RegexMatches matches -> go matches
     _ -> Nothing
-  where go ["", "m", _,    "", signm] = Just $ AXI4MPort "axi4_m" signm p
-        go ["", "s", _,    "", signm] = Just $ AXI4SPort "axi4_s" signm p
+  where go ["", "m", _, "", signm] = Just $ AXI4MPort "axi4_m" signm p
+        go ["", "s", _, "", signm] = Just $ AXI4SPort "axi4_s" signm p
         go ["", "m", _, ifcnm, signm] = Just $ AXI4MPort ifcnm signm p
         go ["", "s", _, ifcnm, signm] = Just $ AXI4SPort ifcnm signm p
-        go ["l", "m", _,    "", signm] = Just $ AXI4LiteMPort "axi4_m" signm p
-        go ["l", "s", _,    "", signm] = Just $ AXI4LiteSPort "axi4_s" signm p
+        go ["l", "m", _, "", signm] = Just $ AXI4LiteMPort "axi4_m" signm p
+        go ["l", "s", _, "", signm] = Just $ AXI4LiteSPort "axi4_s" signm p
         go ["l", "m", _, ifcnm, signm] = Just $ AXI4LiteMPort ifcnm signm p
         go ["l", "s", _, ifcnm, signm] = Just $ AXI4LiteSPort ifcnm signm p
+        go ["str", "m", _, "", signm] = Just $ AXI4StreamMPort "axi4_m" signm p
+        go ["str", "s", _, "", signm] = Just $ AXI4StreamSPort "axi4_s" signm p
+        go ["str", "m", _, ifcnm, signm] = Just $ AXI4StreamMPort ifcnm signm p
+        go ["str", "s", _, ifcnm, signm] = Just $ AXI4StreamSPort ifcnm signm p
         go _ = Nothing
 
 detectIrqPort :: DetectPort
@@ -132,16 +136,23 @@ detectIfcs ports = runST do
               return (iNm, fromMaybe (newAXI4LiteIfc clk rst) (M.lookup iNm mp))
             AXI4LiteSPort iNm _ _ ->
               return (iNm, fromMaybe (newAXI4LiteIfc clk rst) (M.lookup iNm mp))
+            AXI4StreamMPort iNm _ _ ->
+              return ( iNm
+                     , fromMaybe (newAXI4StreamIfc clk rst) (M.lookup iNm mp) )
+            AXI4StreamSPort iNm _ _ ->
+              return ( iNm
+                     , fromMaybe (newAXI4StreamIfc clk rst) (M.lookup iNm mp) )
             IrqSenderPort vp -> return (portName vp, newIrqIfc)
             IrqReceiverPort vp -> return (portName vp, newIrqIfc)
             ConduitPort vp -> return (portName vp, newConduitIfc clk rst)
           go clkRef rstRef ps (M.insert nm ifc{ifcPorts = p : ifcPorts ifc} mp)
-        newClkIfc              = Ifc Nothing Nothing [] Clock
-        newRstIfc      clk     = Ifc     clk Nothing [] Reset
-        newAXI4Ifc     clk rst = Ifc     clk     rst [] AXI4
-        newAXI4LiteIfc clk rst = Ifc     clk     rst [] AXI4Lite
-        newIrqIfc              = Ifc Nothing Nothing [] Irq
-        newConduitIfc  clk rst = Ifc     clk     rst [] Conduit
+        newClkIfc                = Ifc Nothing Nothing [] Clock
+        newRstIfc        clk     = Ifc     clk Nothing [] Reset
+        newAXI4Ifc       clk rst = Ifc     clk     rst [] AXI4
+        newAXI4LiteIfc   clk rst = Ifc     clk     rst [] AXI4Lite
+        newAXI4StreamIfc clk rst = Ifc     clk     rst [] AXI4Stream
+        newIrqIfc                = Ifc Nothing Nothing [] Irq
+        newConduitIfc    clk rst = Ifc     clk     rst [] Conduit
 
 inferInterfaces :: Maybe FilePath -> VerilogModule -> VerilogModuleWithIfc
 inferInterfaces mfp VerilogModule{..} = VerilogModuleWithIfc modName modIfcs mfp

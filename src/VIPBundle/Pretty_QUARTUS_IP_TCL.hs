@@ -96,6 +96,14 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
     isAXI4LiteSIfc Ifc{..} =
       ifcType == AXI4Lite && case head ifcPorts of AXI4LiteSPort _ _ _ -> True
                                                    _ -> False
+    isAXI4StreamMIfc Ifc{..} =
+      ifcType == AXI4Stream && case head ifcPorts of
+                                 AXI4StreamMPort _ _ _ -> True
+                                 _ -> False
+    isAXI4StreamSIfc Ifc{..} =
+      ifcType == AXI4Stream && case head ifcPorts of
+                                 AXI4StreamSPort _ _ _ -> True
+                                 _ -> False
     isIrqSIfc Ifc{..} =
       ifcType == Irq && case head ifcPorts of IrqSenderPort _ -> True
                                               _ -> False
@@ -145,6 +153,10 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
       iPort iNm portName sNm (show portDirection) portWidth
     iIfcPort iNm (AXI4LiteSPort _ sNm VerilogPort{..}) =
       iPort iNm portName sNm (show portDirection) portWidth
+    iIfcPort iNm (AXI4StreamMPort _ sNm VerilogPort{..}) =
+      iPort iNm portName sNm (show portDirection) portWidth
+    iIfcPort iNm (AXI4StreamSPort _ sNm VerilogPort{..}) =
+      iPort iNm portName sNm (show portDirection) portWidth
     iIfcPort iNm (IrqSenderPort VerilogPort{..}) =
       iPort iNm portName "irq" (show portDirection) portWidth
     iIfcPort iNm (IrqReceiverPort VerilogPort{..}) =
@@ -162,6 +174,8 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
                AXI4 | isAXI4SIfc ifc -> text "slave"
                AXI4Lite | isAXI4LiteMIfc ifc -> text "master"
                AXI4Lite | isAXI4LiteSIfc ifc -> text "slave"
+               AXI4Stream | isAXI4StreamMIfc ifc -> text "master"
+               AXI4Stream | isAXI4StreamSIfc ifc -> text "slave"
                Irq | isIrqRIfc ifc -> text "start"
                Clock | isClockSink ifc -> text "end"
                Clock | isClockSource ifc -> text "start"
