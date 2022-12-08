@@ -9,7 +9,7 @@ executable vipbundle
                , VIPBundle.Parse
                , VIPBundle.Pretty_QUARTUS_IP_TCL
                , VIPBundle.Types
-  build-depends: base ^>=4.16.0.0
+  build-depends: base
                , containers
                , pretty
                , filepath

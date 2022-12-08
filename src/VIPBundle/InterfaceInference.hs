@@ -59,18 +59,21 @@ type DetectPort = VerilogPort -> Maybe VerilogPortWithIfc
 
 detectClockPort :: DetectPort
 detectClockPort p@VerilogPort{..} =
-  case portName =~ "\\<cs(i|o)(_(.*))?" :: RegexRetType of
-    RegexMatches ["i",_,_] -> Just $ ClockSinkPort p
-    RegexMatches ["o",_,_] -> Just $ ClockSourcePort p
+  case portName =~ "\\<(cs(i|o)|clk|CLK)(_(.*))?" :: RegexRetType of
+    RegexMatches ["cs","i",_,_] -> Just $ ClockSinkPort p
+    RegexMatches ["cs","o",_,_] -> Just $ ClockSourcePort p
+    RegexMatches [   _,  _,_,_] -> Just $ ClockSinkPort p
     _ -> Nothing
 
 detectResetPort :: DetectPort
 detectResetPort p@VerilogPort{..} =
-  case portName =~ "\\<rs(i|o)(_(n|N))?(_(.*))?" :: RegexRetType of
-    RegexMatches ["i",_,"",_,_] -> Just $ ResetSinkPort   False p
-    RegexMatches ["o",_,"",_,_] -> Just $ ResetSourcePort False p
-    RegexMatches ["i",_, _,_,_] -> Just $ ResetSinkPort   True  p
-    RegexMatches ["o",_, _,_,_] -> Just $ ResetSourcePort True  p
+  case portName =~ "\\<(rs(i|o)|rst|RST)(_(n|N))?(_(.*))?" :: RegexRetType of
+    RegexMatches ["rs","i",_,"",_,_] -> Just $ ResetSinkPort   False p
+    RegexMatches ["rs","o",_,"",_,_] -> Just $ ResetSourcePort False p
+    RegexMatches ["rs","i",_, _,_,_] -> Just $ ResetSinkPort   True  p
+    RegexMatches ["rs","o",_, _,_,_] -> Just $ ResetSourcePort True  p
+    RegexMatches [  _,   _,_,"",_,_] -> Just $ ResetSinkPort   False p
+    RegexMatches [  _,   _,_, _,_,_] -> Just $ ResetSinkPort   True p
     _ -> Nothing
 
 detectAXI4Port :: DetectPort
