@@ -1,5 +1,7 @@
+{-# LANGUAGE OverloadedRecordDot   #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 --
--- Copyright (c) 2021 Alexandre Joannou
+-- Copyright (c) 2021-2023 Alexandre Joannou
 -- All rights reserved.
 --
 -- This material is based upon work supported by the DoD Information Analysis
@@ -35,26 +37,26 @@ module VIPBundle.Pretty_QUARTUS_IP_TCL (
 ) where
 
 import System.FilePath.Posix
-import Data.Map hiding (empty)
+import Data.Map qualified as M
 import Text.PrettyPrint
 
 import VIPBundle.Types
 
 comment doc = char '#' <+> doc
 
-prettyVerilogModuleWithIfc :: VerilogModuleWithIfc -> Doc
-prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
+prettyRichModule :: RichModule -> Doc
+prettyRichModule m =
   vcat $ pkgReq : modDefs : fileSetDefs : ifcsDefs
   where
     -- TCL package require
     pkgReq = text "package require qsys"
     -- Module level definitions
-    modDefs = vcat [ comment (text "module:" <+> text richModName)
-                   , mProp "NAME" richModName
-                   , mProp "DISPLAY_NAME" richModName ]
+    modDefs = vcat [ comment (text "module:" <+> text m.name)
+                   , mProp "NAME" m.name
+                   , mProp "DISPLAY_NAME" m.name ]
     -- File Sets definitions
-    fileSetNm = richModName ++ "_fileset"
-    fileSetDefs = case richModTopFile of
+    fileSetNm = m.name ++ "_fileset"
+    fileSetDefs = case m.topFile of
       Just f -> vcat [ comment $ text "file set"
                      , hsep [ text "add_fileset"
                             , text fileSetNm
@@ -62,7 +64,7 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
                      , hsep [ text "set_fileset_property"
                             , text fileSetNm
                             , text "TOP_LEVEL"
-                            , text richModName ]
+                            , text m.name ]
                      , hsep [ text "add_fileset_file"
                             , text $ takeFileName f
                             , text "VERILOG"
@@ -71,122 +73,54 @@ prettyVerilogModuleWithIfc VerilogModuleWithIfc{..} =
                             , text "TOP_LEVEL_FILE" ] ]
       _ -> empty
     -- Sub-Interface level definitions
-    ifcsDefs = ifcDefs <$> toList richModIfcs
-    ifcDefs (iNm, ifc@Ifc{..}) =
+    ifcsDefs = ifcDefs <$> M.toList m.ifcs
+    ifcDefs (iNm, ifc@(Ifc ps)) =
       vcat $ [ comment (text "interface:" <+> text iNm)
              , iAdd iNm ifc
              , iProp iNm "ENABLED" "true"
-             , case ifcClock of Just clk -> iAssocClk iNm clk
-                                _ -> empty
-             , case ifcReset of Just rst -> iAssocRst iNm rst
-                                _ -> empty
-             , case ifcType of
-                 Reset -> iRstPolarity iNm $ head ifcPorts
-                 _ -> empty ] ++ fmap (iIfcPort iNm) ifcPorts
+             , case ifcClock ifc of Just clk -> iAssocClk iNm clk
+                                    _ -> empty
+             , case ifcReset ifc of Just rst -> iAssocRst iNm rst
+                                    _ -> empty
+             , case ifcType ifc of
+                 Reset n -> iRstPolarity iNm n
+                 _ -> empty ] ++ fmap (iIfcPort iNm) ps
     -- query helpers
-    isAXI4MIfc Ifc{..} =
-      ifcType == AXI4 && case head ifcPorts of AXI4MPort _ _ _ -> True
-                                               _ -> False
-    isAXI4SIfc Ifc{..} =
-      ifcType == AXI4 && case head ifcPorts of AXI4SPort _ _ _ -> True
-                                               _ -> False
-    isAXI4LiteMIfc Ifc{..} =
-      ifcType == AXI4Lite && case head ifcPorts of AXI4LiteMPort _ _ _ -> True
-                                                   _ -> False
-    isAXI4LiteSIfc Ifc{..} =
-      ifcType == AXI4Lite && case head ifcPorts of AXI4LiteSPort _ _ _ -> True
-                                                   _ -> False
-    isAXI4StreamMIfc Ifc{..} =
-      ifcType == AXI4Stream && case head ifcPorts of
-                                 AXI4StreamMPort _ _ _ -> True
-                                 _ -> False
-    isAXI4StreamSIfc Ifc{..} =
-      ifcType == AXI4Stream && case head ifcPorts of
-                                 AXI4StreamSPort _ _ _ -> True
-                                 _ -> False
-    isIrqSIfc Ifc{..} =
-      ifcType == Irq && case head ifcPorts of IrqSenderPort _ -> True
-                                              _ -> False
-    isIrqRIfc Ifc{..} =
-      ifcType == Irq && case head ifcPorts of IrqReceiverPort _ -> True
-                                              _ -> False
-    isClockSink Ifc{..} =
-      ifcType == Clock && case head ifcPorts of ClockSinkPort _ -> True
-                                                _ -> False
-    isClockSource Ifc{..} =
-      ifcType == Clock && case head ifcPorts of ClockSourcePort _ -> True
-                                                _ -> False
-    isResetSink Ifc{..} =
-      ifcType == Reset && case head ifcPorts of ResetSinkPort _ _ -> True
-                                                _ -> False
-    isResetSource Ifc{..} =
-      ifcType == Reset && case head ifcPorts of ResetSourcePort _ _ -> True
-                                                _ -> False
+    getClk ident = case M.lookup ident m.ifcs of Just (Ifc (p:_)) -> Just p
+                                                 _ -> Nothing
+    getRst ident = case M.lookup ident m.ifcs of Just (Ifc (p:_)) -> Just p
+                                                 _ -> Nothing
     -- Quartus platform designer command helpers
-    iAssocClk iNm clk@(ClockSinkPort VerilogPort{..})
-      | portDirection == In && portWidth == 1 =
-        iProp iNm "associatedClock" portName
-      | otherwise = error $ "broken clock: " ++ show clk
-    iAssocRst iNm rst@(ResetSinkPort _ VerilogPort{..})
-      | portDirection == In && portWidth == 1 =
-        iProp iNm "associatedReset" portName
-      | otherwise = error $ "broken reset: " ++ show rst
-    iRstPolarity iNm (ResetSinkPort deAssrt _) =
-      iProp iNm "synchronousEdges" $ if deAssrt then "DEASSERT" else "ASSERT"
-    iRstPolarity iNm (ResetSourcePort deAssrt _) =
-      iProp iNm "synchronousEdges" $ if deAssrt then "DEASSERT" else "ASSERT"
-    iIfcPort iNm (ClockSourcePort VerilogPort{..}) =
-      iPort iNm portName "clk" (show portDirection) portWidth
-    iIfcPort iNm (ClockSinkPort VerilogPort{..}) =
-      iPort iNm portName "clk" (show portDirection) portWidth
-    iIfcPort iNm (ResetSinkPort pol VerilogPort{..}) =
-      iPort iNm portName ("reset" ++ if pol then "_n" else "")
-                         (show portDirection) portWidth
-    iIfcPort iNm (ResetSourcePort pol VerilogPort{..}) =
-      iPort iNm portName ("reset" ++ if pol then "_n" else "")
-                         (show portDirection) portWidth
-    iIfcPort iNm (AXI4MPort _ sNm VerilogPort{..}) =
-      iPort iNm portName sNm (show portDirection) portWidth
-    iIfcPort iNm (AXI4SPort _ sNm VerilogPort{..}) =
-      iPort iNm portName sNm (show portDirection) portWidth
-    iIfcPort iNm (AXI4LiteMPort _ sNm VerilogPort{..}) =
-      iPort iNm portName sNm (show portDirection) portWidth
-    iIfcPort iNm (AXI4LiteSPort _ sNm VerilogPort{..}) =
-      iPort iNm portName sNm (show portDirection) portWidth
-    iIfcPort iNm (AXI4StreamMPort _ sNm VerilogPort{..}) =
-      iPort iNm portName sNm (show portDirection) portWidth
-    iIfcPort iNm (AXI4StreamSPort _ sNm VerilogPort{..}) =
-      iPort iNm portName sNm (show portDirection) portWidth
-    iIfcPort iNm (IrqSenderPort VerilogPort{..}) =
-      iPort iNm portName "irq" (show portDirection) portWidth
-    iIfcPort iNm (IrqReceiverPort VerilogPort{..}) =
-      iPort iNm portName "irq" (show portDirection) portWidth
-    iIfcPort iNm (ConduitPort VerilogPort{..}) =
-      iPort iNm portName portName (show portDirection) portWidth
+    iAssocClk iNm clkIdent = case getClk clkIdent of
+      Just clk | clk.direction == Sink && clk.width == 1 ->
+        iProp iNm "associatedClock" clk.identifier
+      _ -> error $ "broken clock: " ++ show clkIdent
+    iAssocRst iNm rstIdent = case getRst rstIdent of
+      Just rst | rst.direction == Sink && rst.width == 1 ->
+        iProp iNm "associatedReset" rst.identifier
+      _ -> error $ "broken reset: " ++ show rstIdent
+    iRstPolarity iNm n =
+      iProp iNm "synchronousEdges" $ if n then "DEASSERT" else "ASSERT"
+    iPortSig p = case p.typeIfc of
+      Clock -> "clk"
+      Reset n -> "reset" ++ if n then "_n" else ""
+      Irq -> "irq"
+      _ -> p.identSig
+    iIfcPort iNm p =
+      iPort iNm p.identifier (iPortSig p) (show p.direction) p.width
     -- generic Quartus platform designer command helpers
     mProp nm val = hsep [ text "set_module_property", text nm, text val ]
-    iAdd nm ifc@Ifc{..} =
+    iAdd nm ifc =
       hsep [ text "add_interface"
            , text nm
-           , text (show ifcType)
-           , case ifcType of
-               AXI4 | isAXI4MIfc ifc -> text "master"
-               AXI4 | isAXI4SIfc ifc -> text "slave"
-               AXI4Lite | isAXI4LiteMIfc ifc -> text "master"
-               AXI4Lite | isAXI4LiteSIfc ifc -> text "slave"
-               AXI4Stream | isAXI4StreamMIfc ifc -> text "master"
-               AXI4Stream | isAXI4StreamSIfc ifc -> text "slave"
-               Irq | isIrqRIfc ifc -> text "start"
-               Clock | isClockSink ifc -> text "end"
-               Clock | isClockSource ifc -> text "start"
-               Reset | isResetSink ifc -> text "end"
-               Reset | isResetSource ifc -> text "start"
-               _ -> text "end" ]
+           , text (show . ifcType $ ifc)
+           , text (showIfcDirection ifc)
+           ]
     iProp iNm pNm val =
       hsep [ text "set_interface_property", text iNm, text pNm, text val ]
     iPort iNm pNm sNm dir w = hsep [ text "add_interface_port"
                                    , text iNm, text pNm, text sNm
                                    , text dir, integer w ]
 
-pretty_QUARTUS_IP_TCL :: VerilogModuleWithIfc -> String
-pretty_QUARTUS_IP_TCL = render . prettyVerilogModuleWithIfc
+pretty_QUARTUS_IP_TCL :: RichModule -> String
+pretty_QUARTUS_IP_TCL = render . prettyRichModule

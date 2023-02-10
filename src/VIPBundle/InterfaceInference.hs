@@ -1,5 +1,5 @@
 --
--- Copyright (c) 2021 Alexandre Joannou
+-- Copyright (c) 2021-2023 Alexandre Joannou
 -- All rights reserved.
 --
 -- This material is based upon work supported by the DoD Information Analysis
@@ -55,59 +55,109 @@ pattern RegexMatches subs <- (_, _, _, subs)
 -- Generare QSYS tcl file
 -------------------------
 
-type DetectPort = VerilogPort -> Maybe VerilogPortWithIfc
-
-detectClockPort :: DetectPort
-detectClockPort p@VerilogPort{..} =
-  case portName =~ "\\<(cs(i|o)|clk|CLK)(_(.*))?" :: RegexRetType of
-    RegexMatches ["cs","i",_,_] -> Just $ ClockSinkPort p
-    RegexMatches ["cs","o",_,_] -> Just $ ClockSourcePort p
-    RegexMatches [   _,  _,_,_] -> Just $ ClockSinkPort p
+detectClockPort :: VerilogPort -> Maybe RichPort
+detectClockPort p =
+  case p.identifier =~ "\\<(cs(i|o)|clk|CLK)(_(.*))?" :: RegexRetType of
+    RegexMatches ["cs","i",_,_] -> Just $ rp Sink
+    RegexMatches ["cs","o",_,_] -> Just $ rp Source
+    RegexMatches [   _,  _,_,_] -> Just $ rp Sink
     _ -> Nothing
+  where rp d = RichPort { identifier = p.identifier
+                        , direction = d
+                        , width = p.width
+                        , typeIfc = Clock
+                        , identIfc = p.identifier
+                        , identSig = p.identifier
+                        , clockIfc = Nothing
+                        , resetIfc = Nothing
+                        }
 
-detectResetPort :: DetectPort
-detectResetPort p@VerilogPort{..} =
-  case portName =~ "\\<(rs(i|o)|rst|RST)(_(n|N))?(_(.*))?" :: RegexRetType of
-    RegexMatches ["rs","i",_,"",_,_] -> Just $ ResetSinkPort   False p
-    RegexMatches ["rs","o",_,"",_,_] -> Just $ ResetSourcePort False p
-    RegexMatches ["rs","i",_, _,_,_] -> Just $ ResetSinkPort   True  p
-    RegexMatches ["rs","o",_, _,_,_] -> Just $ ResetSourcePort True  p
-    RegexMatches [  _,   _,_,"",_,_] -> Just $ ResetSinkPort   False p
-    RegexMatches [  _,   _,_, _,_,_] -> Just $ ResetSinkPort   True p
+detectResetPort :: VerilogPort -> Maybe RichPort
+detectResetPort p =
+  case p.identifier =~ regex :: RegexRetType of
+    RegexMatches ["rs","i",_,"",_,_] -> Just $ rp   Sink False
+    RegexMatches ["rs","o",_,"",_,_] -> Just $ rp Source False
+    RegexMatches ["rs","i",_, _,_,_] -> Just $ rp   Sink  True
+    RegexMatches ["rs","o",_, _,_,_] -> Just $ rp Source  True
+    RegexMatches [  _,   _,_,"",_,_] -> Just $ rp   Sink False
+    RegexMatches [  _,   _,_, _,_,_] -> Just $ rp   Sink  True
     _ -> Nothing
+  where
+    regex = "\\<(rs(i|o)|rst|RST)(_(n|N))?(_(.*))?"
+    rp d n = RichPort { identifier = p.identifier
+                      , direction = d
+                      , width = p.width
+                      , typeIfc = Reset n
+                      , identIfc = p.identifier
+                      , identSig = p.identifier
+                      , clockIfc = Nothing
+                      , resetIfc = Nothing
+                      }
 
-detectAXI4Port :: DetectPort
-detectAXI4Port p@VerilogPort{..} =
-  case portName =~ "\\<ax(l|str)?([ms])_((.+)_)*(.+)" :: RegexRetType of
+detectAXI4Port :: VerilogPort -> Maybe RichPort
+detectAXI4Port p =
+  case p.identifier =~ regex :: RegexRetType of
+    RegexMatches [pfx, mOrs, _, ifcnm, signm, _, clk, _, rst] ->
+      let ifctype = case pfx of "str" -> AXI4Stream
+                                "l" -> AXI4Lite
+                                _ -> AXI4
+          dir = if mOrs == "m" then Master else Slave
+          ifcname = case ifcnm of "" | dir == Master -> "axi4_m"
+                                  "" | dir == Slave -> "axi4_s"
+                                  nm -> nm
+          mclk = if clk == "" then Nothing else Just clk
+          mrst = if rst == "" then Nothing else Just clk
+      in Just RichPort { identifier = p.identifier
+                       , direction = dir
+                       , width = p.width
+                       , typeIfc = ifctype
+                       , identIfc = ifcname
+                       , identSig = signm
+                       , clockIfc = mclk
+                       , resetIfc = mrst
+                       }
+    _ -> Nothing
+  where
+    regex = "\\<ax(l|str)?([ms])_((.+)_)*(.+)(_C(.+))?(_R(.+))?"
+
+detectIrqPort :: VerilogPort -> Maybe RichPort
+detectIrqPort p =
+  case p.identifier =~ "\\<in([sr])(_(.*))?" :: RegexRetType of
     RegexMatches matches -> go matches
     _ -> Nothing
-  where go ["", "m", _, "", signm] = Just $ AXI4MPort "axi4_m" signm p
-        go ["", "s", _, "", signm] = Just $ AXI4SPort "axi4_s" signm p
-        go ["", "m", _, ifcnm, signm] = Just $ AXI4MPort ifcnm signm p
-        go ["", "s", _, ifcnm, signm] = Just $ AXI4SPort ifcnm signm p
-        go ["l", "m", _, "", signm] = Just $ AXI4LiteMPort "axi4_m" signm p
-        go ["l", "s", _, "", signm] = Just $ AXI4LiteSPort "axi4_s" signm p
-        go ["l", "m", _, ifcnm, signm] = Just $ AXI4LiteMPort ifcnm signm p
-        go ["l", "s", _, ifcnm, signm] = Just $ AXI4LiteSPort ifcnm signm p
-        go ["str", "m", _, "", signm] = Just $ AXI4StreamMPort "axi4_m" signm p
-        go ["str", "s", _, "", signm] = Just $ AXI4StreamSPort "axi4_s" signm p
-        go ["str", "m", _, ifcnm, signm] = Just $ AXI4StreamMPort ifcnm signm p
-        go ["str", "s", _, ifcnm, signm] = Just $ AXI4StreamSPort ifcnm signm p
+  where go ["s", _, _] = Just $ rp Sender
+        go ["r", _, _] = Just $ rp Receiver
         go _ = Nothing
+        rp d = RichPort { identifier = p.identifier
+                        , direction = d
+                        , width = p.width
+                        , typeIfc = Irq
+                        , identIfc = p.identifier
+                        , identSig = p.identifier
+                        , clockIfc = Nothing
+                        , resetIfc = Nothing
+                        }
 
-detectIrqPort :: DetectPort
-detectIrqPort p@VerilogPort{..} =
-  case portName =~ "\\<in([sr])(_(.*))?" :: RegexRetType of
-    RegexMatches matches -> go matches
-    _ -> Nothing
-  where go ["s", _, _] = Just $ IrqSenderPort p
-        go ["r", _, _] = Just $ IrqReceiverPort p
-        go _ = Nothing
 
-detectConduitPort :: DetectPort
-detectConduitPort p = Just $ ConduitPort p
+detectConduitPort :: VerilogPort -> Maybe RichPort
+detectConduitPort p =
+  case p.identifier =~ ".*(_C(.+))?(_R(.+))?" :: RegexRetType of
+    RegexMatches [_, clk, _, rst] ->
+      let mclk = if clk == "" then Nothing else Just clk
+          mrst = if rst == "" then Nothing else Just rst
+      in Just $ rp mclk mrst
+    _ -> Just $ rp Nothing Nothing
+  where rp mclk mrst = RichPort { identifier = p.identifier
+                                , direction = p.direction
+                                , width = p.width
+                                , typeIfc = Conduit
+                                , identIfc = p.identifier
+                                , identSig = p.identifier
+                                , clockIfc = mclk
+                                , resetIfc = mrst
+                                }
 
-detectPortIfcs :: [VerilogPort] -> [VerilogPortWithIfc]
+detectPortIfcs :: [VerilogPort] -> [RichPort]
 detectPortIfcs = fmap (fromMaybe (error "port detection error") . detectIfc)
   where detectIfc p = asum [ detectClockPort p
                            , detectResetPort p
@@ -115,48 +165,13 @@ detectPortIfcs = fmap (fromMaybe (error "port detection error") . detectIfc)
                            , detectIrqPort p
                            , detectConduitPort p ]
 
-detectIfcs :: [VerilogPortWithIfc] -> M.Map String Ifc
-detectIfcs ports = runST do
-  currentClock <- newSTRef Nothing
-  currentReset <- newSTRef Nothing
-  go currentClock currentReset ports M.empty
-  where go _ _ [] mp = return mp
-        go clkRef rstRef (p:ps) mp = do
-          clk <- readSTRef clkRef
-          rst <- readSTRef rstRef
-          (nm, ifc) <- case p of
-            ClockSinkPort vp -> do writeSTRef clkRef $ Just p
-                                   return (portName vp, newClkIfc)
-            ClockSourcePort vp -> return (portName vp, newClkIfc)
-            ResetSinkPort _ vp -> do writeSTRef rstRef $ Just p
-                                     return (portName vp, newRstIfc clk)
-            ResetSourcePort _ vp -> return (portName vp, newRstIfc clk)
-            AXI4MPort iNm _ _ ->
-              return (iNm, fromMaybe (newAXI4Ifc clk rst) (M.lookup iNm mp))
-            AXI4SPort iNm _ _ ->
-              return (iNm, fromMaybe (newAXI4Ifc clk rst) (M.lookup iNm mp))
-            AXI4LiteMPort iNm _ _ ->
-              return (iNm, fromMaybe (newAXI4LiteIfc clk rst) (M.lookup iNm mp))
-            AXI4LiteSPort iNm _ _ ->
-              return (iNm, fromMaybe (newAXI4LiteIfc clk rst) (M.lookup iNm mp))
-            AXI4StreamMPort iNm _ _ ->
-              return ( iNm
-                     , fromMaybe (newAXI4StreamIfc clk rst) (M.lookup iNm mp) )
-            AXI4StreamSPort iNm _ _ ->
-              return ( iNm
-                     , fromMaybe (newAXI4StreamIfc clk rst) (M.lookup iNm mp) )
-            IrqSenderPort vp -> return (portName vp, newIrqIfc)
-            IrqReceiverPort vp -> return (portName vp, newIrqIfc)
-            ConduitPort vp -> return (portName vp, newConduitIfc clk rst)
-          go clkRef rstRef ps (M.insert nm ifc{ifcPorts = p : ifcPorts ifc} mp)
-        newClkIfc                = Ifc Nothing Nothing [] Clock
-        newRstIfc        clk     = Ifc     clk Nothing [] Reset
-        newAXI4Ifc       clk rst = Ifc     clk     rst [] AXI4
-        newAXI4LiteIfc   clk rst = Ifc     clk     rst [] AXI4Lite
-        newAXI4StreamIfc clk rst = Ifc     clk     rst [] AXI4Stream
-        newIrqIfc                = Ifc Nothing Nothing [] Irq
-        newConduitIfc    clk rst = Ifc     clk     rst [] Conduit
+detectIfcs :: [RichPort] -> M.Map String Ifc
+detectIfcs = go M.empty
+  where go mp [] = mp
+        go mp (p:ps) = go (M.alter (updtIfc p) p.identIfc mp) ps
+        updtIfc p Nothing = Just $ Ifc [p]
+        updtIfc p (Just (Ifc ps)) = Just $ Ifc (p:ps)
 
-inferInterfaces :: Maybe FilePath -> VerilogModule -> VerilogModuleWithIfc
-inferInterfaces mfp VerilogModule{..} = VerilogModuleWithIfc modName modIfcs mfp
-  where modIfcs = detectIfcs . detectPortIfcs $ modPorts
+inferInterfaces :: Maybe FilePath -> VerilogModule -> RichModule
+inferInterfaces mfp m = RichModule m.name modIfcs mfp
+  where modIfcs = detectIfcs . detectPortIfcs $ m.ports

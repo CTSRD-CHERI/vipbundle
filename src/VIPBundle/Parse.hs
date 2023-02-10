@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot   #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 --
 -- Copyright (c) 2021 Alexandre Joannou
 -- All rights reserved.
@@ -56,7 +58,7 @@ stripTrailWs p = p >>= \res -> ws >> return res
 reservedWs str = stripTrailWs $ reserved tp str
 naturalWs = fromInteger <$> stripTrailWs (natural tp)
 naturalNoWs = fromInteger <$> natural tp
-identifierWs = stripTrailWs $ identifier tp
+identifierWs = stripTrailWs $ Text.Parsec.Token.identifier tp
 parensWs p = stripTrailWs (parens tp $ whiteSpace tp >> p)
 bracesWs p = stripTrailWs (braces tp $ whiteSpace tp >> p)
 bracketsWs p = stripTrailWs (brackets tp $ whiteSpace tp >> p)

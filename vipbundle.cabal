@@ -15,4 +15,4 @@ executable vipbundle
                , filepath
                , parsec
                , regex-tdfa
-  default-language: Haskell2010
+  default-language: GHC2021

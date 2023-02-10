@@ -1,3 +1,6 @@
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE OverloadedRecordDot   #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 --
 -- Copyright (c) 2021 Alexandre Joannou
 -- All rights reserved.
@@ -28,151 +31,234 @@
 -- @BERI_LICENSE_HEADER_END@
 --
 
-{-# LANGUAGE RecordWildCards #-}
-
 module VIPBundle.Types (
-  PortDir (..)
+  PortDir (.., Start, End
+             , Source, Sink
+             , Master, Slave
+             , Sender, Receiver)
 , IfcType (..)
 , VerilogPort (..)
 , VerilogModule (..)
-, VerilogPortWithIfc (..)
+, RichPort (..)
+, IfcIdentifier
+, SignalIdentifier
 , Ifc (..)
-, VerilogModuleWithIfc (..)
+, ifcDirection
+, ifcType
+, ifcIdent
+, ifcClock
+, ifcReset
+, showIfcDirection
+, RichModule (..)
 ) where
 
 import Prelude hiding ((<>))
-import Data.Map hiding (empty)
+import Data.Map qualified as M
 import Text.PrettyPrint
 
+-- Port Direction
+--------------------------------------------------------------------------------
+
 data PortDir = In | Out deriving Eq
-instance Show PortDir where
-  show In  = "Input"
-  show Out = "Output"
+
+showDirInOut :: PortDir -> String
+showDirInOut  In =  "In"
+showDirInOut Out = "Out"
+
+instance Show PortDir where show = showDirInOut
+
+pattern Start :: PortDir
+pattern Start = Out
+
+pattern End :: PortDir
+pattern End = In
+
+showDirStartEnd :: PortDir -> String
+showDirStartEnd Start = "start"
+showDirStartEnd   End =   "end"
+
+pattern Source :: PortDir
+pattern Source = Out
+
+pattern Sink :: PortDir
+pattern Sink = In
+
+showDirSourceSink :: PortDir -> String
+showDirSourceSink Source = "source"
+showDirSourceSink   Sink =   "sink"
+
+pattern Master :: PortDir
+pattern Master = Out
+
+pattern Slave :: PortDir
+pattern Slave = In
+
+showDirMasterSlave :: PortDir -> String
+showDirMasterSlave Master = "master"
+showDirMasterSlave  Slave =  "slave"
+
+pattern Sender :: PortDir
+pattern Sender = Out
+
+pattern Receiver :: PortDir
+pattern Receiver = In
+
+showDirSenderReceiver :: PortDir -> String
+showDirSenderReceiver   Sender =   "sender"
+showDirSenderReceiver Receiver = "receiver"
+
+-- Verilog types
+--------------------------------------------------------------------------------
+
+data VerilogPort = VerilogPort {
+    identifier :: String
+  , direction  :: PortDir
+  , width      :: Integer
+  }
+
+docVerilogPort :: VerilogPort -> Doc
+docVerilogPort p =
+  text p.identifier <+>
+  (braces . sep . punctuate comma)
+    [ text "width:" <+> integer p.width
+    , text "dir:"   <+> text (show p.direction) ]
+
+instance Show VerilogPort where show = render . docVerilogPort
+
+data VerilogModule = VerilogModule {
+    name  :: String
+  , ports :: [VerilogPort]
+  }
+
+docVerilogModule :: VerilogModule -> Doc
+docVerilogModule m =
+  hang (text m.name <> colon) 2 (sep $ fmap docVerilogPort m.ports)
+
+instance Show VerilogModule where show = render . docVerilogModule
+
+-- Interface types
+--------------------------------------------------------------------------------
+
+type IfcIdentifier = String
+
+type SignalIdentifier = String
+
 data IfcType =
     Clock
-  | Reset
+  | Reset { activeLow :: Bool}
   | AXI4
   | AXI4Lite
   | AXI4Stream
   | Irq
   | Conduit
   deriving Eq
-instance Show IfcType where
-  show Clock = "clock"
-  show Reset = "reset"
-  show AXI4 = "axi4"
-  show AXI4Lite = "axi4lite"
-  show AXI4Stream = "axi4stream"
-  show Irq = "interrupt"
-  show Conduit = "conduit"
 
-data VerilogPort = VerilogPort {
-  portName      :: String
-, portDirection :: PortDir
-, portWidth     :: Integer }
-docVerilogPort :: VerilogPort -> Doc
-docVerilogPort VerilogPort{..} =
-  text portName <+>
-  (braces . sep . punctuate comma)
-    [ text "width:" <+> integer portWidth
-    , text "dir:"   <+> text (show portDirection) ]
-instance Show VerilogPort where show = render . docVerilogPort
+showIfcType :: IfcType -> String
+showIfcType Clock = "clock"
+showIfcType Reset {activeLow=False} = "reset"
+showIfcType Reset {activeLow=True} = "resetn"
+showIfcType AXI4 = "axi4"
+showIfcType AXI4Lite = "axi4lite"
+showIfcType AXI4Stream = "axi4stream"
+showIfcType Irq = "interrupt"
+showIfcType Conduit = "conduit"
 
-data VerilogModule = VerilogModule {
-  modName  :: String
-, modPorts :: [VerilogPort] }
-docVerilogModule :: VerilogModule -> Doc
-docVerilogModule VerilogModule{..} =
-  hang (text modName <> colon) 2 (sep $ fmap docVerilogPort modPorts)
-instance Show VerilogModule where show = render . docVerilogModule
+instance Show IfcType where show = showIfcType
 
-data VerilogPortWithIfc =
-    ClockSinkPort VerilogPort
-  | ClockSourcePort VerilogPort
-  | ResetSinkPort Bool VerilogPort
-  | ResetSourcePort Bool VerilogPort
-  | AXI4MPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
-  | AXI4SPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
-  | AXI4LiteMPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
-  | AXI4LiteSPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
-  | AXI4StreamMPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
-  | AXI4StreamSPort String String VerilogPort -- ifc name, axi4 standard sig name, full sig
-  | IrqSenderPort VerilogPort
-  | IrqReceiverPort VerilogPort
-  | ConduitPort VerilogPort
-docVerilogPortWithIfc :: VerilogPortWithIfc -> Doc
-docVerilogPortWithIfc (ClockSinkPort vp) =
-  hsep [ text "Clock Sink", text "--", docVerilogPort vp ]
-docVerilogPortWithIfc (ClockSourcePort vp) =
-  hsep [ text "Clock Source", text "--", docVerilogPort vp ]
-docVerilogPortWithIfc (ResetSinkPort activLo vp) =
-  hsep [ text "Reset Sink"
-       , if activLo then text "[Active Low]" else empty
-       , text "--", docVerilogPort vp ]
-docVerilogPortWithIfc (ResetSourcePort activLo vp) =
-  hsep [ text "Reset Source"
-       , if activLo then text "[Active Low]" else empty
-       , text "--", docVerilogPort vp ]
-docVerilogPortWithIfc (AXI4MPort _ sNm vp) =
-  hsep [ text "AXI4 Master", text "-"
-       , text sNm, text "--"
-       , docVerilogPort vp ]
-docVerilogPortWithIfc (AXI4SPort _ sNm vp) =
-  hsep [ text "AXI4 Slave", text "-"
-       , text sNm, text "--"
-       , docVerilogPort vp ]
-docVerilogPortWithIfc (AXI4LiteMPort _ sNm vp) =
-  hsep [ text "AXI4Lite Master", text "-"
-       , text sNm, text "--"
-       , docVerilogPort vp ]
-docVerilogPortWithIfc (AXI4LiteSPort _ sNm vp) =
-  hsep [ text "AXI4Lite Slave", text "-"
-       , text sNm, text "--"
-       , docVerilogPort vp ]
-docVerilogPortWithIfc (AXI4StreamMPort _ sNm vp) =
-  hsep [ text "AXI4Stream Master", text "-"
-       , text sNm, text "--"
-       , docVerilogPort vp ]
-docVerilogPortWithIfc (AXI4StreamSPort _ sNm vp) =
-  hsep [ text "AXI4Stream Slave", text "-"
-       , text sNm, text "--"
-       , docVerilogPort vp ]
-docVerilogPortWithIfc (IrqSenderPort vp) =
-  hsep [ text "Interrupt Sender", text "--" , docVerilogPort vp ]
-docVerilogPortWithIfc (IrqReceiverPort vp) =
-  hsep [ text "Interrupt Receiver", text "--" , docVerilogPort vp ]
-docVerilogPortWithIfc (ConduitPort vp) =
-  hsep [ text "<no interface>", text "--", docVerilogPort vp ]
-instance Show VerilogPortWithIfc where show = render . docVerilogPortWithIfc
+data RichPort = RichPort {
+    identifier :: String
+  , direction :: PortDir
+  , width :: Integer
+  , typeIfc :: IfcType
+  , identIfc :: IfcIdentifier
+  , clockIfc :: Maybe IfcIdentifier
+  , resetIfc :: Maybe IfcIdentifier
+  , identSig :: SignalIdentifier
+  }
 
-data Ifc = Ifc {
-  ifcClock :: Maybe VerilogPortWithIfc
-, ifcReset :: Maybe VerilogPortWithIfc
-, ifcPorts :: [VerilogPortWithIfc]
-, ifcType  :: IfcType }
+docRichPort :: RichPort -> Doc
+docRichPort p =
+  hsep [ text $ showIfcType p.typeIfc
+       , text $ showDirSourceSink p.direction
+       , text "--"
+       , int (fromInteger p.width) <> text "-bit"
+       , text "identifier:" <+> text p.identifier
+       , text "interface:" <+> text p.identIfc
+       , text "signal:" <+> text p.identSig
+       , docClk
+       , docRst
+       ]
+  where docClk = maybe empty (\x -> text "clocked_by:" <+> text x) p.clockIfc
+        docRst = maybe empty (\x -> text "reset_by:" <+> text x) p.resetIfc
+
+instance Show RichPort where show = render . docRichPort
+
+newtype Ifc = Ifc [RichPort]
+
+ifcDirection :: Ifc -> PortDir
+ifcDirection (Ifc []) = error "ifcDirection called on empty interface"
+ifcDirection (Ifc ps) = if ins > outs then In else Out
+  where (ins, outs) = foldl (\(x, y) p -> case p.direction of
+                                            In -> (x+1,y)
+                                            _  -> (x, y+1))
+                            (0,0)
+                            ps
+
+ifcType :: Ifc -> IfcType
+ifcType (Ifc []) = error "ifcType called on empty interface"
+ifcType (Ifc (p:_)) = p.typeIfc
+
+ifcIdent :: Ifc -> IfcIdentifier
+ifcIdent (Ifc []) = error "ifcIdent called on empty interface"
+ifcIdent (Ifc (p:_)) = p.identIfc
+
+ifcClock :: Ifc -> Maybe IfcIdentifier
+ifcClock (Ifc []) = error "ifcClock called on empty interface"
+ifcClock (Ifc (p:_)) = p.clockIfc
+
+ifcReset :: Ifc -> Maybe IfcIdentifier
+ifcReset (Ifc []) = error "ifcReset called on empty interface"
+ifcReset (Ifc (p:_)) = p.resetIfc
+
+showIfcDirection :: Ifc -> String
+showIfcDirection ifc = go . ifcDirection $ ifc
+  where go = case ifcType ifc of Clock -> showDirSourceSink
+                                 Reset _ -> showDirSourceSink
+                                 AXI4 -> showDirMasterSlave
+                                 AXI4Lite -> showDirMasterSlave
+                                 AXI4Stream -> showDirMasterSlave
+                                 Irq -> showDirSenderReceiver
+                                 Conduit -> showDirStartEnd
+
 docIfc :: Ifc -> Doc
-docIfc Ifc{..} =
-  hang (text (show ifcType) <+> text "(interface)") 2
-       (vcat [ case ifcClock of
-                 Just p -> text "associated clock:" <+> docVerilogPortWithIfc p
+docIfc ifc@(Ifc ps) =
+  hang (    (text . show . ifcType $ ifc)
+        <+> (parens . text . showIfcDirection $ ifc) )
+       2
+       (vcat [ case ifcClock ifc of
+                 Just clk -> text "associated clock:" <+> text clk
                  Nothing -> text "no associated clock"
-             , case ifcReset of
-                 Just p -> text "associated reset:" <+> docVerilogPortWithIfc p
+             , case ifcReset ifc of
+                 Just rst -> text "associated reset:" <+> text rst
                  Nothing -> text "no associated reset"
-             , sep $ (text "ports:") : fmap docVerilogPortWithIfc ifcPorts ])
+             , sep $ text "ports:" : fmap docRichPort ps ])
+
 instance Show Ifc where show = render . docIfc
 
-data VerilogModuleWithIfc = VerilogModuleWithIfc {
-  richModName    :: String
-, richModIfcs    :: Map String Ifc
-, richModTopFile :: Maybe FilePath }
-docVerilogModuleWithIfc :: VerilogModuleWithIfc -> Doc
-docVerilogModuleWithIfc VerilogModuleWithIfc{..} =
-  hang (hsep [text "--", text richModName, text "(module)", text "--"]) 2
-       (vcat $ topfileline : fmap prettyIfc (toList richModIfcs))
+data RichModule = RichModule {
+    name    :: String
+  , ifcs    :: M.Map IfcIdentifier Ifc
+  , topFile :: Maybe FilePath
+  }
+
+docRichModule :: RichModule -> Doc
+docRichModule m =
+  hang (hsep [text "--", text m.name, text "(module)", text "--"]) 2
+       (vcat $ topfileline : fmap prettyIfc (M.toList m.ifcs))
   where prettyIfc (nm, ifc) =
           text "*" <+> text nm <> colon <+> docIfc ifc
-        topfileline = case richModTopFile of
+        topfileline = case m.topFile of
                         Just f -> text "top file: " <> text f
                         _ -> empty
-instance Show VerilogModuleWithIfc where show = render . docVerilogModuleWithIfc
+
+instance Show RichModule where show = render . docRichModule
