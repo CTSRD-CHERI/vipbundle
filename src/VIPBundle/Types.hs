@@ -166,7 +166,8 @@ showIfcType Conduit = "conduit"
 instance Show IfcType where show = showIfcType
 
 data RichPort = RichPort {
-    identifier :: String
+    rawIdentifier :: String
+  , identifier :: String
   , direction :: PortDir
   , width :: Integer
   , typeIfc :: IfcType
@@ -182,6 +183,7 @@ docRichPort p =
        , text $ showDirSourceSink p.direction
        , text "--"
        , int (fromInteger p.width) <> text "-bit"
+       , text "rawIdentifier:" <+> text p.rawIdentifier
        , text "identifier:" <+> text p.identifier
        , text "interface:" <+> text p.identIfc
        , text "signal:" <+> text p.identSig

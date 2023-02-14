@@ -107,7 +107,7 @@ prettyRichModule m =
       Irq -> "irq"
       _ -> p.identSig
     iIfcPort iNm p =
-      iPort iNm p.identifier (iPortSig p) (show p.direction) p.width
+      iPort iNm p.rawIdentifier (iPortSig p) (show p.direction) p.width
     -- generic Quartus platform designer command helpers
     mProp nm val = hsep [ text "set_module_property", text nm, text val ]
     iAdd nm ifc =

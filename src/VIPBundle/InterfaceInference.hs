@@ -131,9 +131,10 @@ splitIdentifier ident =
                      }
 
 detectPortIfc :: VerilogPort -> RichPort
-detectPortIfc vp = rp'{ identifier = vp.identifier } -- XXX GHC warning...
+detectPortIfc vp = rp'
   where idSplit = splitIdentifier vp.identifier
-        rp = RichPort { identifier = idSplit.rest
+        rp = RichPort { rawIdentifier = vp.identifier
+                      , identifier = idSplit.rest
                       , direction = vp.direction
                       , width = vp.width
                       , typeIfc = Conduit
