@@ -62,8 +62,8 @@ import Text.PrettyPrint
 data PortDir = In | Out deriving Eq
 
 showDirInOut :: PortDir -> String
-showDirInOut  In =  "In"
-showDirInOut Out = "Out"
+showDirInOut  In =  "Input"
+showDirInOut Out = "Output"
 
 instance Show PortDir where show = showDirInOut
 
