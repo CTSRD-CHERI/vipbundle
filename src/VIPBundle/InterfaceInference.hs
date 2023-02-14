@@ -28,10 +28,11 @@
 -- @BERI_LICENSE_HEADER_END@
 --
 
-{-# LANGUAGE BlockArguments      #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE BlockArguments        #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE OverloadedRecordDot   #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module VIPBundle.InterfaceInference (
   inferInterfaces
@@ -41,9 +42,10 @@ import Data.Maybe
 import Data.STRef
 import Data.Foldable
 import Control.Monad
+import Data.List.Split
 import Text.Regex.TDFA
 import Control.Monad.ST
-import qualified Data.Map as M
+import Data.Map qualified as M
 
 import VIPBundle.Types
 
@@ -52,27 +54,16 @@ import VIPBundle.Types
 type RegexRetType = (String, String, String, [String])
 pattern RegexMatches subs <- (_, _, _, subs)
 
--- Generare QSYS tcl file
--------------------------
-
-detectClockPort :: VerilogPort -> Maybe RichPort
+detectClockPort :: RichPort -> Maybe RichPort
 detectClockPort p =
   case p.identifier =~ "\\<(cs(i|o)|clk|CLK)(_(.*))?" :: RegexRetType of
     RegexMatches ["cs","i",_,_] -> Just $ rp Sink
     RegexMatches ["cs","o",_,_] -> Just $ rp Source
     RegexMatches [   _,  _,_,_] -> Just $ rp Sink
     _ -> Nothing
-  where rp d = RichPort { identifier = p.identifier
-                        , direction = d
-                        , width = p.width
-                        , typeIfc = Clock
-                        , identIfc = p.identifier
-                        , identSig = p.identifier
-                        , clockIfc = Nothing
-                        , resetIfc = Nothing
-                        }
+  where rp d = p { direction = d , typeIfc = Clock }
 
-detectResetPort :: VerilogPort -> Maybe RichPort
+detectResetPort :: RichPort -> Maybe RichPort
 detectResetPort p =
   case p.identifier =~ regex :: RegexRetType of
     RegexMatches ["rs","i",_,"",_,_] -> Just $ rp   Sink False
@@ -84,43 +75,29 @@ detectResetPort p =
     _ -> Nothing
   where
     regex = "\\<(rs(i|o)|rst|RST)(_(n|N))?(_(.*))?"
-    rp d n = RichPort { identifier = p.identifier
-                      , direction = d
-                      , width = p.width
-                      , typeIfc = Reset n
-                      , identIfc = p.identifier
-                      , identSig = p.identifier
-                      , clockIfc = Nothing
-                      , resetIfc = Nothing
-                      }
+    rp d n = p { direction = d , typeIfc = Reset n }
 
-detectAXI4Port :: VerilogPort -> Maybe RichPort
+detectAXI4Port :: RichPort -> Maybe RichPort
 detectAXI4Port p =
   case p.identifier =~ regex :: RegexRetType of
-    RegexMatches [pfx, mOrs, _, ifcnm, signm, _, clk, _, rst] ->
+    RegexMatches [pfx, mOrS, _, ifcnm, signm] ->
       let ifctype = case pfx of "str" -> AXI4Stream
                                 "l" -> AXI4Lite
                                 _ -> AXI4
-          dir = if mOrs == "m" then Master else Slave
+          dir = if mOrS == "m" then Master else Slave
           ifcname = case ifcnm of "" | dir == Master -> "axi4_m"
                                   "" | dir == Slave -> "axi4_s"
                                   nm -> nm
-          mclk = if clk == "" then Nothing else Just clk
-          mrst = if rst == "" then Nothing else Just clk
-      in Just RichPort { identifier = p.identifier
-                       , direction = dir
-                       , width = p.width
-                       , typeIfc = ifctype
-                       , identIfc = ifcname
-                       , identSig = signm
-                       , clockIfc = mclk
-                       , resetIfc = mrst
-                       }
+      in Just p { direction = dir
+                , typeIfc = ifctype
+                , identIfc = ifcname
+                , identSig = signm
+                }
     _ -> Nothing
   where
-    regex = "\\<ax(l|str)?([ms])_((.+)_)*(.+)(_C(.+))?(_R(.+))?"
+    regex = "\\<ax(l|str)?([ms])_((.+)_)*(.+)"
 
-detectIrqPort :: VerilogPort -> Maybe RichPort
+detectIrqPort :: RichPort -> Maybe RichPort
 detectIrqPort p =
   case p.identifier =~ "\\<in([sr])(_(.*))?" :: RegexRetType of
     RegexMatches matches -> go matches
@@ -128,42 +105,49 @@ detectIrqPort p =
   where go ["s", _, _] = Just $ rp Sender
         go ["r", _, _] = Just $ rp Receiver
         go _ = Nothing
-        rp d = RichPort { identifier = p.identifier
-                        , direction = d
-                        , width = p.width
-                        , typeIfc = Irq
-                        , identIfc = p.identifier
-                        , identSig = p.identifier
-                        , clockIfc = Nothing
-                        , resetIfc = Nothing
-                        }
+        rp d = p { direction = d , typeIfc = Irq }
 
+detectConduitPort :: RichPort -> Maybe RichPort
+detectConduitPort = Just
 
-detectConduitPort :: VerilogPort -> Maybe RichPort
-detectConduitPort p =
-  case p.identifier =~ ".*(_C(.+))?(_R(.+))?" :: RegexRetType of
-    RegexMatches [_, clk, _, rst] ->
-      let mclk = if clk == "" then Nothing else Just clk
-          mrst = if rst == "" then Nothing else Just rst
-      in Just $ rp mclk mrst
-    _ -> Just $ rp Nothing Nothing
-  where rp mclk mrst = RichPort { identifier = p.identifier
-                                , direction = p.direction
-                                , width = p.width
-                                , typeIfc = Conduit
-                                , identIfc = p.identifier
-                                , identSig = p.identifier
-                                , clockIfc = mclk
-                                , resetIfc = mrst
-                                }
+extractField :: String -> String -> (Maybe String, String)
+extractField delimiter string =
+  case splitOn delimiter string of
+    [pfx, clk, sfx] -> (Just clk, pfx ++ sfx)
+    [original] -> (Nothing, original)
 
-detectPortIfcs :: [VerilogPort] -> [RichPort]
-detectPortIfcs = fmap (fromMaybe (error "port detection error") . detectIfc)
-  where detectIfc p = asum [ detectClockPort p
-                           , detectResetPort p
-                           , detectAXI4Port p
-                           , detectIrqPort p
-                           , detectConduitPort p ]
+data IdentifierSplit = IdentifierSplit { clock :: Maybe String
+                                       , reset :: Maybe String
+                                       , rest :: String
+                                       }
+
+splitIdentifier :: String -> IdentifierSplit
+splitIdentifier ident =
+  let (mClk,  ident') = extractField "_C_" ident
+      (mRst, ident'') = extractField "_R_" ident'
+  in IdentifierSplit { clock = mClk
+                     , reset = mRst
+                     , rest = ident''
+                     }
+
+detectPortIfc :: VerilogPort -> RichPort
+detectPortIfc vp = rp'{ identifier = vp.identifier } -- XXX GHC warning...
+  where idSplit = splitIdentifier vp.identifier
+        rp = RichPort { identifier = idSplit.rest
+                      , direction = vp.direction
+                      , width = vp.width
+                      , typeIfc = Conduit
+                      , identIfc = idSplit.rest
+                      , identSig = idSplit.rest
+                      , clockIfc = idSplit.clock
+                      , resetIfc = idSplit.reset
+                      }
+        rp' = fromMaybe (error "port detection error") $
+                asum [ detectClockPort rp
+                     , detectResetPort rp
+                     , detectAXI4Port rp
+                     , detectIrqPort rp
+                     , detectConduitPort rp ]
 
 detectIfcs :: [RichPort] -> M.Map String Ifc
 detectIfcs = go M.empty
@@ -174,4 +158,4 @@ detectIfcs = go M.empty
 
 inferInterfaces :: Maybe FilePath -> VerilogModule -> RichModule
 inferInterfaces mfp m = RichModule m.name modIfcs mfp
-  where modIfcs = detectIfcs . detectPortIfcs $ m.ports
+  where modIfcs = detectIfcs . (detectPortIfc <$>) $ m.ports

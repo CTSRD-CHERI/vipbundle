@@ -13,6 +13,7 @@ executable vipbundle
                , containers
                , pretty
                , filepath
+               , split
                , parsec
                , regex-tdfa
   default-language: GHC2021
