@@ -61,7 +61,7 @@ detectClockPort p =
     RegexMatches ["cs","o",_,_] -> Just $ rp Source
     RegexMatches [   _,  _,_,_] -> Just $ rp Sink
     _ -> Nothing
-  where rp d = p { direction = d , typeIfc = Clock }
+  where rp d = p { typeIfc = Clock }
 
 detectResetPort :: RichPort -> Maybe RichPort
 detectResetPort p =
@@ -75,7 +75,7 @@ detectResetPort p =
     _ -> Nothing
   where
     regex = "\\<(rs(i|o)|rst|RST)(_(n|N))?(_(.*))?"
-    rp d n = p { direction = d , typeIfc = Reset n }
+    rp d n = p { typeIfc = Reset n }
 
 detectAXI4Port :: RichPort -> Maybe RichPort
 detectAXI4Port p =
@@ -88,8 +88,7 @@ detectAXI4Port p =
           ifcname = case ifcnm of "" | dir == Master -> "axi4_m"
                                   "" | dir == Slave -> "axi4_s"
                                   nm -> nm
-      in Just p { direction = dir
-                , typeIfc = ifctype
+      in Just p { typeIfc = ifctype
                 , identIfc = ifcname
                 , identSig = signm
                 }
@@ -105,7 +104,7 @@ detectIrqPort p =
   where go ["s", _, _] = Just $ rp Sender
         go ["r", _, _] = Just $ rp Receiver
         go _ = Nothing
-        rp d = p { direction = d , typeIfc = Irq }
+        rp d = p { typeIfc = Irq }
 
 detectConduitPort :: RichPort -> Maybe RichPort
 detectConduitPort = Just
