@@ -155,8 +155,7 @@ data IfcType =
 
 showIfcType :: IfcType -> String
 showIfcType Clock = "clock"
-showIfcType Reset {activeLow=False} = "reset"
-showIfcType Reset {activeLow=True} = "resetn"
+showIfcType Reset {} = "reset"
 showIfcType AXI4 = "axi4"
 showIfcType AXI4Lite = "axi4lite"
 showIfcType AXI4Stream = "axi4stream"
