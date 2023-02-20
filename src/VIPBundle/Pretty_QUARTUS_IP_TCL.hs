@@ -44,6 +44,16 @@ import VIPBundle.Types
 
 comment doc = char '#' <+> doc
 
+scanlWithClkRst :: ( (Maybe IfcIdentifier, Maybe IfcIdentifier)
+                     -> (IfcIdentifier, Ifc)
+                     -> a ) -> [(IfcIdentifier, Ifc)] -> [a]
+scanlWithClkRst f ifcs =
+  (snd <$>) . tail $ scanl f' ((Nothing, Nothing), undefined) ifcs
+  where f' ((mClk, mRst), _) x@(iNm, ifc) = case ifcType ifc of
+          Clock -> ((Just iNm, mRst), f (mClk, mRst) x)
+          Reset _ -> ((mClk, Just iNm), f (mClk, mRst) x)
+          _ -> ((mClk, mRst), f (mClk, mRst) x)
+
 prettyRichModule :: RichModule -> Doc
 prettyRichModule m =
   vcat $ pkgReq : modDefs : fileSetDefs : ifcsDefs
@@ -73,15 +83,19 @@ prettyRichModule m =
                             , text "TOP_LEVEL_FILE" ] ]
       _ -> empty
     -- Sub-Interface level definitions
-    ifcsDefs = ifcDefs <$> M.toList m.ifcs
-    ifcDefs (iNm, ifc@(Ifc ps)) =
+    ifcsDefs = scanlWithClkRst ifcDefs (M.toList m.ifcs)
+    ifcDefs (mClk, mRst) (iNm, ifc@(Ifc ps)) =
       vcat $ [ comment (text "interface:" <+> text iNm)
              , iAdd iNm ifc
              , iProp iNm "ENABLED" "true"
-             , case ifcClock ifc of Just clk -> iAssocClk iNm clk
-                                    _ -> empty
-             , case ifcReset ifc of Just rst -> iAssocRst iNm rst
-                                    _ -> empty
+             , case (ifcClock ifc, mClk) of
+                 (Just clk, _) -> iAssocClk iNm clk
+                 (_, Just clk) -> iAssocClk iNm clk
+                 _ -> empty
+             , case (ifcReset ifc, mRst) of
+                 (Just rst, _) -> iAssocRst iNm rst
+                 (_, Just rst) -> iAssocRst iNm rst
+                 _ -> empty
              , case ifcType ifc of
                  Reset n -> iRstPolarity iNm n
                  _ -> empty ] ++ fmap (iIfcPort iNm) ps
