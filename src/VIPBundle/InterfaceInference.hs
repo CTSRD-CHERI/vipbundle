@@ -56,10 +56,10 @@ pattern RegexMatches subs <- (_, _, _, subs)
 
 detectClockPort :: RichPort -> Maybe RichPort
 detectClockPort p =
-  case p.identifier =~ "\\<(cs(i|o)|clk|CLK)(_(.*))?" :: RegexRetType of
-    RegexMatches ["cs","i",_,_] -> Just $ rp Sink
-    RegexMatches ["cs","o",_,_] -> Just $ rp Source
-    RegexMatches [   _,  _,_,_] -> Just $ rp Sink
+  case p.identifier =~ "\\<(cs(i|o)|clk|CLK)((_(gate|GATE))?(_(.*)))?" :: RegexRetType of
+    RegexMatches ["cs","i",_,_,"",_,_] -> Just $ rp Sink
+    RegexMatches ["cs","o",_,_,"",_,_] -> Just $ rp Source
+    RegexMatches [   _,  _,_,_,"",_,_] -> Just $ rp Sink
     _ -> Nothing
   where rp d = p { typeIfc = Clock, clockIfc = Nothing, resetIfc = Nothing }
 
