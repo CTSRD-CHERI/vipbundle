@@ -88,13 +88,15 @@ prettyRichModule m =
       vcat $ [ comment (text "interface:" <+> text iNm)
              , iAdd iNm ifc
              , iProp iNm "ENABLED" "true"
-             , case (ifcClock ifc, mClk) of
-                 (Just clk, _) -> iAssocClk iNm clk
-                 (_, Just clk) -> iAssocClk iNm clk
+             , case (ifcType ifc, ifcClock ifc, mClk) of
+                 (Clock, _, _) -> empty
+                 (_, Just clk, _) -> iAssocClk iNm clk
+                 (_, _, Just clk) -> iAssocClk iNm clk
                  _ -> empty
-             , case (ifcReset ifc, mRst) of
-                 (Just rst, _) -> iAssocRst iNm rst
-                 (_, Just rst) -> iAssocRst iNm rst
+             , case (ifcType ifc, ifcReset ifc, mRst) of
+                 (Reset _, Just rst, _) -> empty
+                 (_, Just rst, _) -> iAssocRst iNm rst
+                 (_, _, Just rst) -> iAssocRst iNm rst
                  _ -> empty
              , case ifcType ifc of
                  Reset n -> iRstPolarity iNm n
@@ -106,11 +108,11 @@ prettyRichModule m =
                                                  _ -> Nothing
     -- Quartus platform designer command helpers
     iAssocClk iNm clkIdent = case getClk clkIdent of
-      Just clk | clk.direction == Sink && clk.width == 1 ->
+      Just clk | clk.width == 1 ->
         iProp iNm "associatedClock" clk.identifier
       _ -> error $ "broken clock: " ++ show clkIdent
     iAssocRst iNm rstIdent = case getRst rstIdent of
-      Just rst | rst.direction == Sink && rst.width == 1 ->
+      Just rst | rst.width == 1 ->
         iProp iNm "associatedReset" rst.identifier
       _ -> error $ "broken reset: " ++ show rstIdent
     iRstPolarity iNm n =
