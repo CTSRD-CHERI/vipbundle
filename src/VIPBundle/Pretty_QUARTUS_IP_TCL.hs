@@ -84,7 +84,8 @@ prettyRichModule m =
       _ -> empty
     -- Sub-Interface level definitions
     ifcsDefs = scanlWithClkRst ifcDefs (M.toList m.ifcs)
-    ifcDefs (mClk, mRst) (iNm, ifc@(Ifc ps)) =
+    ifcDefs (mClk, mRst) (iNm, ifc@(Ifc ps)) | ifcType ifc == Ignore = empty
+                                             | otherwise =
       vcat $ [ comment (text "interface:" <+> text iNm)
              , iAdd iNm ifc
              , iProp iNm "ENABLED" "true"

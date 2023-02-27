@@ -54,6 +54,13 @@ import VIPBundle.Types
 type RegexRetType = (String, String, String, [String])
 pattern RegexMatches subs <- (_, _, _, subs)
 
+detectIgnorePort :: RichPort -> Maybe RichPort
+detectIgnorePort p =
+  case p.identifier =~ "\\<(IGNORE|ignore)(.*)?" :: RegexRetType of
+    RegexMatches ["IGNORE",_] -> Just p{ typeIfc = Ignore }
+    RegexMatches ["ignore",_] -> Just p{ typeIfc = Ignore }
+    _ -> Nothing
+
 detectClockPort :: RichPort -> Maybe RichPort
 detectClockPort p =
   case p.identifier =~ "\\<(cs(i|o)|clk|CLK)(_(.*))?" :: RegexRetType of
@@ -143,7 +150,8 @@ detectPortIfc vp = rp'
                       , resetIfc = idSplit.reset
                       }
         rp' = fromMaybe (error "port detection error") $
-                asum [ detectClockPort rp
+                asum [ detectIgnorePort rp
+                     , detectClockPort rp
                      , detectResetPort rp
                      , detectAXI4Port rp
                      , detectIrqPort rp

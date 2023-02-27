@@ -151,6 +151,7 @@ data IfcType =
   | AXI4Stream
   | Irq
   | Conduit
+  | Ignore
   deriving Eq
 
 showIfcType :: IfcType -> String
@@ -161,6 +162,7 @@ showIfcType AXI4Lite = "axi4lite"
 showIfcType AXI4Stream = "axi4stream"
 showIfcType Irq = "interrupt"
 showIfcType Conduit = "conduit"
+showIfcType Ignore = "ignored"
 
 instance Show IfcType where show = showIfcType
 
