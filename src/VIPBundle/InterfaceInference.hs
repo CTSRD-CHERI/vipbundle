@@ -81,7 +81,7 @@ detectResetPort p =
     RegexMatches [  _,   _,_, _,_,_] -> Just $ rp   Sink  True
     _ -> Nothing
   where
-    regex = "\\<(rs(i|o)|rst|RST)(_(n|N))?(_(.*))?"
+    regex = "\\<(rs(i|o)|rst|RST)(.*_(n|N))?(_(.*))?"
     rp d n = p { typeIfc = Reset n, resetIfc = Nothing }
 
 detectAXI4Port :: RichPort -> Maybe RichPort
