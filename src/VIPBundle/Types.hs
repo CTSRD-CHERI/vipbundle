@@ -232,6 +232,7 @@ showIfcDirection ifc = go . ifcDirection $ ifc
                                  AXI4Stream -> showDirMasterSlave
                                  Irq -> showDirSenderReceiver
                                  Conduit -> showDirStartEnd
+                                 Ignore -> showDirStartEnd
 
 docIfc :: Ifc -> Doc
 docIfc ifc@(Ifc ps) =
