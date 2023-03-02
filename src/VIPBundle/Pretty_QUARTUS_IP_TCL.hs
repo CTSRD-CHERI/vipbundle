@@ -95,7 +95,8 @@ prettyRichModule m =
                  (_, _, Just clk) -> iAssocClk iNm clk
                  _ -> empty
              , case (ifcType ifc, ifcReset ifc, mRst) of
-                 (Reset _, Just rst, _) -> empty
+                 (Clock, _, _) -> empty
+                 (Reset _, _, _) -> empty
                  (_, Just rst, _) -> iAssocRst iNm rst
                  (_, _, Just rst) -> iAssocRst iNm rst
                  _ -> empty
