@@ -113,6 +113,21 @@ detectIrqPort p =
         go _ = Nothing
         rp d = p { typeIfc = Irq }
 
+detectConduitIfcPort :: RichPort -> Maybe RichPort
+detectConduitIfcPort p =
+  case p.identifier =~ regex :: RegexRetType of
+    RegexMatches [sOrE, _, ifcnm, signm] ->
+      let dir = if sOrE == "s" then Start else End
+          ifcname = case ifcnm of "" | dir == Start -> "conduitIfcStart"
+                                  "" | dir == End -> "conduitIfcEnd"
+                                  nm -> nm
+      in Just p { identIfc = ifcname
+                , identSig = signm
+                }
+    _ -> Nothing
+  where
+    regex = "\\<ci([se])_((.+)_)*(.+)"
+
 detectConduitPort :: RichPort -> Maybe RichPort
 detectConduitPort = Just
 
@@ -155,6 +170,7 @@ detectPortIfc vp = rp'
                      , detectResetPort rp
                      , detectAXI4Port rp
                      , detectIrqPort rp
+                     , detectConduitIfcPort rp
                      , detectConduitPort rp ]
 
 detectIfcs :: [RichPort] -> M.Map String Ifc
