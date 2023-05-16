@@ -149,6 +149,7 @@ data IfcType =
   | AXI4
   | AXI4Lite
   | AXI4Stream
+  | Avalon
   | Irq
   | Conduit
   | Ignore
@@ -160,6 +161,7 @@ showIfcType Reset {} = "reset"
 showIfcType AXI4 = "axi4"
 showIfcType AXI4Lite = "axi4lite"
 showIfcType AXI4Stream = "axi4stream"
+showIfcType Avalon = "avalon"
 showIfcType Irq = "interrupt"
 showIfcType Conduit = "conduit"
 showIfcType Ignore = "ignored"
@@ -230,6 +232,7 @@ showIfcDirection ifc = go . ifcDirection $ ifc
                                  AXI4 -> showDirMasterSlave
                                  AXI4Lite -> showDirMasterSlave
                                  AXI4Stream -> showDirMasterSlave
+                                 Avalon -> showDirMasterSlave
                                  Irq -> showDirSenderReceiver
                                  Conduit -> showDirStartEnd
                                  Ignore -> showDirStartEnd

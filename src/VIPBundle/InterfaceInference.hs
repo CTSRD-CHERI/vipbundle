@@ -103,6 +103,22 @@ detectAXI4Port p =
   where
     regex = "\\<ax(l|str)?([ms])_((.+)_)*(.+)"
 
+detectAvalonPort :: RichPort -> Maybe RichPort
+detectAvalonPort p =
+  case p.identifier =~ regex :: RegexRetType of
+    RegexMatches [mOrS, _, ifcnm, signm] ->
+      let dir = if mOrS == "m" then Master else Slave
+          ifcname = case ifcnm of "" | dir == Master -> "av_host"
+                                  "" | dir == Slave -> "av_agent"
+                                  nm -> nm
+      in Just p { typeIfc = Avalon
+                , identIfc = ifcname
+                , identSig = signm
+                }
+    _ -> Nothing
+  where
+    regex = "\\<av([ms])_((.+)_)*(.+)"
+
 detectIrqPort :: RichPort -> Maybe RichPort
 detectIrqPort p =
   case p.identifier =~ "\\<in([sr])(_(.*))?" :: RegexRetType of
@@ -169,6 +185,7 @@ detectPortIfc vp = rp'
                      , detectClockPort rp
                      , detectResetPort rp
                      , detectAXI4Port rp
+                     , detectAvalonPort rp
                      , detectIrqPort rp
                      , detectConduitIfcPort rp
                      , detectConduitPort rp ]
