@@ -45,7 +45,7 @@ jobs:
       uses: actions/upload-artifact@master
       with:
         name: vipbundle
-        path: vipbindle
+        path: vipbundle
 
   release:
     needs: ubuntu_20_04_build
@@ -55,7 +55,7 @@ jobs:
       uses: actions/download-artifact@master
       with:
         name: vipbundle
-        path: vipbundle
+        path: ./
     - name: Get current date
       id: date
       run: echo "::set-output name=date::$(date +'%Y%m%d')"
