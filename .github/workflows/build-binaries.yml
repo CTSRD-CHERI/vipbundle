@@ -36,10 +36,11 @@ jobs:
     - name: Install dependencies
       run: |
         cabal update
-        cabal build --only-dependencies --enable-tests --enable-benchmarks
-        cp `cabal list-bin vipbundle` vipbundle
+        cabal build --only-dependencies
     - name: Build
-      run: cabal build
+      run: |
+        cabal build
+        cp `cabal list-bin vipbundle` vipbundle
 
   release:
     needs: ubuntu_20_04_build
