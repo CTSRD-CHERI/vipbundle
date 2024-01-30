@@ -16,4 +16,6 @@ executable vipbundle
                , split
                , parsec
                , regex-tdfa
+               , aeson
+               , bytestring
   default-language: GHC2021

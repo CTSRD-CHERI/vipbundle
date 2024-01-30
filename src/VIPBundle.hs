@@ -40,6 +40,8 @@ import Control.Monad
 import System.Environment
 import System.Console.GetOpt
 import qualified Data.Map as M
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy.Char8 as BS
 
 import VIPBundle.Types
 import VIPBundle.Parse
@@ -49,7 +51,7 @@ import VIPBundle.InterfaceInference
 -- command line arguments
 --------------------------------------------------------------------------------
 
-data OutputFormat = QUARTUS_IP_TCL | TXT
+data OutputFormat = QUARTUS_IP_TCL | TXT | JSON
 
 instance Read OutputFormat where
   readPrec = do Ident "quartus_ip_tcl" <- lexP
@@ -57,6 +59,9 @@ instance Read OutputFormat where
              +++
              do Ident "txt" <- lexP
                 return TXT
+             +++
+             do Ident "json" <- lexP
+                return JSON
 
 data Options = Options { optOutputFile   :: Maybe FilePath
                        , optOutputFormat :: OutputFormat
@@ -109,6 +114,7 @@ main = do
                                           Nothing -> return stdout
   let pretty = case optOutputFormat opts of
                  QUARTUS_IP_TCL -> pretty_QUARTUS_IP_TCL
+                 JSON -> BS.unpack . Aeson.encode
                  _ -> show
   --
   allVerilogModules <- parseVerilog mInptFileName <$> hGetContents inptHandle

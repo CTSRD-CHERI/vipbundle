@@ -1,6 +1,7 @@
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE OverloadedRecordDot   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DeriveGeneric #-}
 --
 -- Copyright (c) 2021 Alexandre Joannou
 -- All rights reserved.
@@ -55,17 +56,21 @@ module VIPBundle.Types (
 import Prelude hiding ((<>))
 import Data.Map qualified as M
 import Text.PrettyPrint
+import Data.Aeson
+import GHC.Generics
 
 -- Port Direction
 --------------------------------------------------------------------------------
 
-data PortDir = In | Out deriving Eq
+data PortDir = In | Out deriving (Eq, Generic)
 
 showDirInOut :: PortDir -> String
 showDirInOut  In =  "Input"
 showDirInOut Out = "Output"
 
 instance Show PortDir where show = showDirInOut
+
+instance ToJSON PortDir
 
 pattern Start :: PortDir
 pattern Start = Out
@@ -114,7 +119,7 @@ data VerilogPort = VerilogPort {
     identifier :: String
   , direction  :: PortDir
   , width      :: Integer
-  }
+  } deriving (Generic)
 
 docVerilogPort :: VerilogPort -> Doc
 docVerilogPort p =
@@ -125,16 +130,20 @@ docVerilogPort p =
 
 instance Show VerilogPort where show = render . docVerilogPort
 
+instance ToJSON VerilogPort
+
 data VerilogModule = VerilogModule {
     name  :: String
   , ports :: [VerilogPort]
-  }
+  } deriving (Generic)
 
 docVerilogModule :: VerilogModule -> Doc
 docVerilogModule m =
   hang (text m.name <> colon) 2 (sep $ fmap docVerilogPort m.ports)
 
 instance Show VerilogModule where show = render . docVerilogModule
+
+instance ToJSON VerilogModule
 
 -- Interface types
 --------------------------------------------------------------------------------
@@ -153,7 +162,7 @@ data IfcType =
   | Irq
   | Conduit
   | Ignore
-  deriving Eq
+  deriving (Eq, Generic)
 
 showIfcType :: IfcType -> String
 showIfcType Clock = "clock"
@@ -168,6 +177,8 @@ showIfcType Ignore = "ignored"
 
 instance Show IfcType where show = showIfcType
 
+instance ToJSON IfcType
+
 data RichPort = RichPort {
     rawIdentifier :: String
   , identifier :: String
@@ -178,7 +189,7 @@ data RichPort = RichPort {
   , clockIfc :: Maybe IfcIdentifier
   , resetIfc :: Maybe IfcIdentifier
   , identSig :: SignalIdentifier
-  }
+  } deriving (Generic)
 
 docRichPort :: RichPort -> Doc
 docRichPort p =
@@ -198,7 +209,9 @@ docRichPort p =
 
 instance Show RichPort where show = render . docRichPort
 
-newtype Ifc = Ifc [RichPort]
+instance ToJSON RichPort
+
+newtype Ifc = Ifc [RichPort] deriving (Generic)
 
 ifcDirection :: Ifc -> PortDir
 ifcDirection (Ifc []) = error "ifcDirection called on empty interface"
@@ -252,11 +265,13 @@ docIfc ifc@(Ifc ps) =
 
 instance Show Ifc where show = render . docIfc
 
+instance ToJSON Ifc
+
 data RichModule = RichModule {
     name    :: String
   , ifcs    :: M.Map IfcIdentifier Ifc
   , topFile :: Maybe FilePath
-  }
+  } deriving (Generic)
 
 docRichModule :: RichModule -> Doc
 docRichModule m =
@@ -269,3 +284,5 @@ docRichModule m =
                         _ -> empty
 
 instance Show RichModule where show = render . docRichModule
+
+instance ToJSON RichModule
