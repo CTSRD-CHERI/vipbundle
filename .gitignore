@@ -1,1 +1,3 @@
 dist-newstyle/
+# Ignore the compiled executable
+vipbundle
