@@ -150,7 +150,7 @@ detectConduitPort = Just
 extractField :: String -> String -> (Maybe String, String)
 extractField delimiter string =
   case splitOn delimiter string of
-    [pfx, clk, sfx] -> (Just clk, pfx ++ sfx)
+    [pfx, fld, sfx] -> (Just fld, pfx ++ sfx)
     [original] -> (Nothing, original)
 
 data IdentifierSplit = IdentifierSplit { clock :: Maybe String
