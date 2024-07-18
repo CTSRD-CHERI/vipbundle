@@ -176,7 +176,7 @@ detectPortIfc vp = rp'
                       , width = vp.width
                       , typeIfc = Conduit
                       , identIfc = idSplit.rest
-                      , identSig = idSplit.rest
+                      , identSig = "conduit_" ++ show vp.width
                       , clockIfc = idSplit.clock
                       , resetIfc = idSplit.reset
                       }
